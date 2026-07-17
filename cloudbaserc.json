@@ -1,5 +1,5 @@
 {
-  "envId": "trial.magic-english-main-d2cp777306bc7",
+  "envId": "magic-english-main-d2cp777306bc7",
   "version": "2.0",
   "framework": {
     "name": "vue",
@@ -7,7 +7,7 @@
       "client": {
         "use": "@cloudbase/framework-plugin-website",
         "inputs": {
-          "buildCommand": "npm run build",
+          "buildCommand": "VITE_API_BASE=https://magic-english-api-282732-9-14135805257.sh.run.tcloudbase.com/api/v1 npm run build",
           "outputPath": "dist",
           "cloudPath": "/",
           "envVariables": {}
@@ -23,9 +23,9 @@
           "uploadType": "package",
           "envVariables": {
             "NODE_ENV": "production",
-            "DATABASE_URL": "postgresql://magic_api_user:Tengfei0612$@sh-postgres-fk627k8w.sql.tencentcdb.com:24079/postgres",
-            "JWT_SECRET": "magic-english-jwt-secret-2026",
-            "CORS_ORIGINS": "https://magic-english-main-d2cp777306bc7-1413580527.tcloudbaseapp.com,http://localhost:5173,http://localhost:4173"
+            "DATABASE_URL": "postgresql://magic_api_user:Tengfei0612%24@sh-postgres-fk627k8w.sql.tencentcdb.com:24079/postgres",
+            "JWT_SECRET": "be838efb1b72b0679116cf2e9a01aa9de5375c59f2236f575b574db8fa9d76e4ba0264931530a49e9aee167dd7f0e7c5b9f38942d43397c06a40e65f699fbd3f",
+            "CORS_ORIGINS": "https://magic-english-main-xxx.tcloudbaseapp.com,http://localhost:5173,http://localhost:4173"
           }
         }
       }
