@@ -2,18 +2,45 @@ import { ref, onMounted, onBeforeUnmount, type Ref } from 'vue'
 import { Application, Graphics, Container, Ticker } from 'pixi.js'
 
 /**
+ * 支持的动画名称（与 Spine 骨骼动画命名对齐，确保迁移无缝）
+ */
+type AnimationName =
+  | 'idle'
+  | 'happy'
+  | 'excited'
+  | 'eat'
+  | 'sleep'
+  | 'sad'
+  | 'think'
+  | 'surprise'
+  | 'wave'
+  | 'bounce'
+  | 'nod'
+
+/**
  * PixiJS 豆豆渲染 composable
  * 管理 PixiJS Application 的完整生命周期
- * 无 Spine 资源时显示占位粒子效果（呼吸光晕 + 浮动豆豆）
+ *
+ * 当前阶段（无 Spine 资源）：
+ *   - 用 Graphics 绘制可爱的种子精灵豆豆
+ *   - 呼吸光晕 + 浮动动画 + 星光粒子
+ *   - playAnimation 支持 11 种动画的 CSS 级模拟效果
+ *
+ * 后续阶段（接入 Spine 后）：
+ *   - 替换 drawPlaceholderDodo → 加载真实骨骼动画
+ *   - playAnimation 调用 SpineLoader.playAnimation
+ *   - 接口完全兼容，业务代码无需修改
  */
 export function usePixiDodo(canvasRef: Ref<HTMLCanvasElement | null>) {
   const app = ref<Application | null>(null)
   const ready = ref(false)
   const dodoContainer = ref<Container | null>(null)
+  const currentAnimation = ref<AnimationName>('idle')
 
   let breathTicker: Ticker | null = null
   let floatTicker: Ticker | null = null
   let particleTicker: Ticker | null = null
+  let animTimeout: ReturnType<typeof setTimeout> | null = null
 
   /**
    * 初始化 PixiJS 并绘制占位豆豆
@@ -203,16 +230,214 @@ export function usePixiDodo(canvasRef: Ref<HTMLCanvasElement | null>) {
   }
 
   /**
-   * 播放豆豆动画（预留 Spine 接口）
+   * 播放豆豆动画
+   *
+   * 当前用 PixiJS Graphics 属性模拟（缩放/旋转/位移/透明度变化），
+   * 后续接入 Spine 后替换为真实骨骼动画调用，接口保持不变。
    */
-  function playAnimation(_name: string) {
-    // TODO: 接入 Spine 后实现
-    // 当前用缩放弹跳模拟
-    if (dodoContainer.value) {
-      const c = dodoContainer.value
-      const origScale = c.scale.x
-      c.scale.set(origScale * 1.15)
-      setTimeout(() => c.scale.set(origScale), 200)
+  function playAnimation(name: AnimationName) {
+    if (!dodoContainer.value) return
+    const c = dodoContainer.value
+    const origScale = c.scale.x
+    const origAlpha = c.alpha
+    const origX = c.x
+    const origY = c.y
+    const origRotation = c.rotation
+
+    // 清除上一次动画的残留定时器
+    if (animTimeout) {
+      clearTimeout(animTimeout)
+      // 恢复基础状态
+      c.scale.set(origScale)
+      c.alpha = origAlpha
+      c.rotation = origRotation
+    }
+
+    currentAnimation.value = name
+
+    const duration = 400 // 动画持续时间（ms）
+    const framesPerTick = 4
+    const tickMs = duration / framesPerTick
+
+    switch (name) {
+      case 'happy': {
+        // 左右摇摆 + 轻微弹跳
+        let frame = 0
+        const tick = setInterval(() => {
+          if (frame >= framesPerTick) { clearInterval(tick); return }
+          const t = frame / framesPerTick
+          c.rotation = Math.sin(t * Math.PI * 2) * 0.08
+          c.scale.set(origScale * (1 + 0.05 * Math.sin(t * Math.PI * 2)))
+          frame++
+        }, tickMs)
+        animTimeout = setTimeout(() => {
+          c.rotation = origRotation
+          c.scale.set(origScale)
+        }, duration)
+        break
+      }
+
+      case 'excited': {
+        // 快速缩放弹跳 + 微微旋转
+        let frame = 0
+        const tick = setInterval(() => {
+          if (frame >= framesPerTick) { clearInterval(tick); return }
+          const t = frame / framesPerTick
+          const bounce = Math.abs(Math.sin(t * Math.PI * 3)) * 0.12
+          c.scale.set(origScale * (1 + bounce))
+          c.rotation = Math.sin(t * Math.PI * 4) * 0.1
+          frame++
+        }, tickMs)
+        animTimeout = setTimeout(() => {
+          c.rotation = origRotation
+          c.scale.set(origScale)
+        }, duration)
+        break
+      }
+
+      case 'eat': {
+        // 快速小幅度缩放（模拟咀嚼）
+        let frame = 0
+        const tick = setInterval(() => {
+          if (frame >= framesPerTick) { clearInterval(tick); return }
+          const t = frame / framesPerTick
+          c.scale.set(origScale * (1 + 0.06 * Math.sin(t * Math.PI * 6)))
+          frame++
+        }, tickMs)
+        animTimeout = setTimeout(() => {
+          c.scale.set(origScale)
+        }, duration)
+        break
+      }
+
+      case 'sleep': {
+        // 缓慢缩小 + 降低透明度（模拟入睡）
+        let frame = 0
+        const tick = setInterval(() => {
+          if (frame >= framesPerTick) { clearInterval(tick); return }
+          const t = frame / framesPerTick
+          c.scale.set(origScale * (1 - 0.08 * t))
+          c.alpha = origAlpha * (1 - 0.2 * t)
+          frame++
+        }, tickMs)
+        animTimeout = setTimeout(() => {
+          c.scale.set(origScale)
+          c.alpha = origAlpha
+        }, duration)
+        break
+      }
+
+      case 'sad': {
+        // 缓慢缩小 + 微微低头
+        let frame = 0
+        const tick = setInterval(() => {
+          if (frame >= framesPerTick) { clearInterval(tick); return }
+          const t = frame / framesPerTick
+          c.scale.set(origScale * (1 - 0.06 * t))
+          c.rotation = -0.06 * t
+          c.y = origY + 4 * t
+          frame++
+        }, tickMs)
+        animTimeout = setTimeout(() => {
+          c.scale.set(origScale)
+          c.rotation = origRotation
+          c.y = origY
+        }, duration)
+        break
+      }
+
+      case 'think': {
+        // 左右轻摆（思考中）
+        let frame = 0
+        const tick = setInterval(() => {
+          if (frame >= framesPerTick) { clearInterval(tick); return }
+          const t = frame / framesPerTick
+          c.rotation = Math.sin(t * Math.PI * 3) * 0.06
+          c.x = origX + Math.sin(t * Math.PI * 2) * 3
+          frame++
+        }, tickMs)
+        animTimeout = setTimeout(() => {
+          c.rotation = origRotation
+          c.x = origX
+        }, duration)
+        break
+      }
+
+      case 'surprise': {
+        // 先缩小，再放大，恢复（受惊反应）
+        let frame = 0
+        const tick = setInterval(() => {
+          if (frame >= framesPerTick) { clearInterval(tick); return }
+          const t = frame / framesPerTick
+          // 缩→放→回
+          let s: number
+          if (t < 0.25) s = 1 - 0.08 * (t / 0.25)       // 缩小
+          else if (t < 0.5) s = 0.92 + 0.18 * ((t - 0.25) / 0.25) // 放大
+          else s = 1.1 - 0.1 * ((t - 0.5) / 0.5)         // 恢复
+          c.scale.set(origScale * s)
+          frame++
+        }, tickMs)
+        animTimeout = setTimeout(() => {
+          c.scale.set(origScale)
+        }, duration)
+        break
+      }
+
+      case 'wave': {
+        // 左右位移（挥手）
+        let frame = 0
+        const tick = setInterval(() => {
+          if (frame >= framesPerTick) { clearInterval(tick); return }
+          const t = frame / framesPerTick
+          c.x = origX + Math.sin(t * Math.PI * 4) * 8
+          frame++
+        }, tickMs)
+        animTimeout = setTimeout(() => {
+          c.x = origX
+        }, duration)
+        break
+      }
+
+      case 'bounce': {
+        // 连续弹跳（上下位移）
+        let frame = 0
+        const tick = setInterval(() => {
+          if (frame >= framesPerTick) { clearInterval(tick); return }
+          const t = frame / framesPerTick
+          const bounceY = -Math.abs(Math.sin(t * Math.PI * 3)) * 12
+          c.y = origY + bounceY
+          c.scale.set(origScale * (1 + 0.04 * Math.abs(Math.sin(t * Math.PI * 3))))
+          frame++
+        }, tickMs)
+        animTimeout = setTimeout(() => {
+          c.y = origY
+          c.scale.set(origScale)
+        }, duration)
+        break
+      }
+
+      case 'nod': {
+        // 点头（微微前倾后恢复）
+        let frame = 0
+        const tick = setInterval(() => {
+          if (frame >= framesPerTick) { clearInterval(tick); return }
+          const t = frame / framesPerTick
+          c.rotation = Math.sin(t * Math.PI * 2) * 0.1
+          c.y = origY + Math.abs(Math.sin(t * Math.PI)) * 3
+          frame++
+        }, tickMs)
+        animTimeout = setTimeout(() => {
+          c.rotation = origRotation
+          c.y = origY
+        }, duration)
+        break
+      }
+
+      case 'idle':
+      default: {
+        // idle：不做特殊动画，保持呼吸+浮动
+        break
+      }
     }
   }
 
@@ -226,6 +451,10 @@ export function usePixiDodo(canvasRef: Ref<HTMLCanvasElement | null>) {
     floatTicker?.destroy()
     particleTicker?.stop()
     particleTicker?.destroy()
+    if (animTimeout) {
+      clearTimeout(animTimeout)
+      animTimeout = null
+    }
     app.value?.destroy(true, { children: true })
     app.value = null
     ready.value = false
@@ -242,6 +471,7 @@ export function usePixiDodo(canvasRef: Ref<HTMLCanvasElement | null>) {
 
   return {
     ready,
+    currentAnimation,
     playAnimation,
     destroy,
   }

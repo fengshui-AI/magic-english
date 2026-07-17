@@ -216,3 +216,70 @@ body {
 .animate-fade-in {
   animation: fadeInUp 0.6s ease-out forwards;
 }
+
+/* ============================================================
+   响应式断点
+   - 默认（移动端）: < 480px，单列全宽布局
+   - 平板（≥ 768px）: 适度放宽，更好的视觉比例
+   - 桌面（≥ 1024px）: 居中卡片式布局，保持 max-width 约束
+   ============================================================ */
+
+/* 平板及以上 */
+@media (min-width: 768px) {
+  .page {
+    padding: 32px 24px 100px;
+  }
+
+  .page-header h1 {
+    font-size: 28px;
+  }
+
+  .page-header p {
+    font-size: 16px;
+  }
+
+  .btn {
+    padding: 14px 28px;
+    font-size: 16px;
+  }
+}
+
+/* 桌面 */
+@media (min-width: 1024px) {
+  .page {
+    padding: 40px 32px 120px;
+  }
+
+  .page-header h1 {
+    font-size: 32px;
+  }
+}
+
+/* 超小屏幕（320px 级别） */
+@media (max-width: 360px) {
+  .page {
+    padding: 12px 10px 90px;
+  }
+
+  .page-header h1 {
+    font-size: 20px;
+  }
+
+  .card {
+    padding: 14px;
+  }
+
+  .btn {
+    padding: 10px 18px;
+    font-size: 14px;
+  }
+
+  .nav-item {
+    padding: 4px 10px;
+    font-size: 10px;
+  }
+
+  .nav-icon {
+    font-size: 18px;
+  }
+}
