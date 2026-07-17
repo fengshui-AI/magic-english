@@ -16,11 +16,10 @@ export interface SpineAssetPaths {
  * 封装 @esotericsoftware/spine-pixi 的加载、播放、切换逻辑
  */
 export class SpineLoader {
-  private app: Application
   private spine: Spine | null = null
 
-  constructor(app: Application) {
-    this.app = app
+  constructor(_app: Application) {
+    // _app 预留用于后续 Spine 资源管理
   }
 
   /**

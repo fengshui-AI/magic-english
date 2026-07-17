@@ -328,7 +328,7 @@ async function loadTodayWords() {
   try {
     // 先获取每日计划（含今日待学单词 ID）
     const plan = await fetchDailyPlan()
-    const wordIds = plan?.plan?.newWords || []
+    const wordIds: string[] = (plan?.plan?.newWords || []).map((w: any) => w.wordId || w.id || w)
 
     if (wordIds.length === 0) {
       // 没有新单词计划，直接从词库取 5 个
@@ -353,7 +353,7 @@ async function loadTodayWords() {
       if (result && result.items.length > 0) {
         const wordMap = new Map(result.items.map((w) => [w.id, w]))
         words.value = wordIds
-          .map((id: string) => wordMap.get(id))
+          .map((id) => wordMap.get(id))
           .filter(Boolean)
           .map((w) => {
             const style = themeStyle(w!.theme)

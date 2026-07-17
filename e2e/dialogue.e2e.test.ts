@@ -16,7 +16,7 @@ beforeAll(async () => {
   const regRes = await fetch(`${BASE_URL}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone, name: '对话测试', role: 'child', grade: 3 }),
+    body: JSON.stringify({ phone, name: '对话测试', role: 'child', grade: 3, ageSegment: 'mid' }),
   })
   const regData = await regRes.json()
   token = regData.token
@@ -117,21 +117,6 @@ describe('对话交互 E2E', () => {
       // 3轮后应该进入 topic 或 practice 阶段
       expect(['topic', 'practice'].includes(data.stage)).toBe(true)
     })
-
-    it('POST /dialogue/message 拒绝不存在的会话', async () => {
-      const res = await fetch(`${BASE_URL}/dialogue/message`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          sessionId: '00000000-0000-0000-0000-000000000000',
-          message: 'hello',
-        }),
-      })
-      expect(res.status).toBe(400)
-    })
   })
 
   // ============================================================
@@ -182,6 +167,21 @@ describe('对话交互 E2E', () => {
       const data = await res.json()
       expect(res.status).toBe(200)
       expect(Array.isArray(data.sessions)).toBe(true)
+    })
+
+    it('POST /dialogue/message 拒绝已结束的会话', async () => {
+      const res = await fetch(`${BASE_URL}/dialogue/message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          sessionId: '00000000-0000-0000-0000-000000000000',
+          message: 'hello',
+        }),
+      })
+      expect(res.status).toBe(400)
     })
   })
 })

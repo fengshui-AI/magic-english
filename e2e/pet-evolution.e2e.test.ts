@@ -16,7 +16,7 @@ beforeAll(async () => {
   const regRes = await fetch(`${BASE_URL}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone, name: '豆豆成长测试', role: 'child', grade: 3 }),
+    body: JSON.stringify({ phone, name: '豆豆成长测试', role: 'child', grade: 3, ageSegment: 'mid' }),
   })
   const regData = await regRes.json()
   token = regData.token

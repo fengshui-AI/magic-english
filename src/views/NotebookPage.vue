@@ -170,13 +170,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { fetchWords, fetchTopics, wordsStore } from '../stores/words'
-import { fetchWords, fetchTopics, wordsStore } from '../stores/words'
+import { fetchWords, fetchTopics } from '../stores/words'
 
 const router = useRouter()
 const toast = ref('')
-const loading = ref(true)
-const error = ref<string | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
 
@@ -198,14 +195,43 @@ const activeTheme = ref('all')
 const sortBy = ref<'recent' | 'alphabet' | 'mastery'>('recent')
 const detailWord = ref<NotebookWord | null>(null)
 
-const themes = [
-  { id: 'animals', name: '动物', icon: '🐱' },
+// 主题元数据
+const THEME_META: Record<string, { name: string; icon: string }> = {
+  animal: { name: '动物', icon: '🐱' },
+  food: { name: '美食', icon: '🍕' },
+  school: { name: '学校', icon: '📚' },
+  nature: { name: '自然', icon: '🌿' },
+  family: { name: '家庭', icon: '👨‍👩‍👧' },
+  color: { name: '颜色', icon: '🎨' },
+  body: { name: '身体', icon: '🦵' },
+  weather: { name: '天气', icon: '🌤️' },
+  sports: { name: '运动', icon: '⚽' },
+  transport: { name: '交通', icon: '🚗' },
+  space: { name: '太空', icon: '🚀' },
+}
+
+const THEME_STYLES: Record<string, { emoji: string; bg: string }> = {
+  animal: { emoji: '🐱', bg: '#ffe8e0' },
+  food: { emoji: '🍕', bg: '#ffe0e0' },
+  school: { emoji: '📚', bg: '#e0f0ff' },
+  nature: { emoji: '🌿', bg: '#e8ffe0' },
+  family: { emoji: '👨‍👩‍👧', bg: '#ffe0f0' },
+  color: { emoji: '🎨', bg: '#f0e0ff' },
+  body: { emoji: '🦵', bg: '#fff8e0' },
+  weather: { emoji: '🌤️', bg: '#e0f8ff' },
+  sports: { emoji: '⚽', bg: '#e8ffe8' },
+  transport: { emoji: '🚗', bg: '#ffe8e8' },
+  space: { emoji: '🚀', bg: '#e8e0ff' },
+}
+
+const themes = ref<{ id: string; name: string; icon: string }[]>([
+  { id: 'animal', name: '动物', icon: '🐱' },
   { id: 'food', name: '美食', icon: '🍕' },
   { id: 'school', name: '学校', icon: '📚' },
   { id: 'nature', name: '自然', icon: '🌿' },
   { id: 'family', name: '家庭', icon: '👨‍👩‍👧' },
-  { id: 'colors', name: '颜色', icon: '🎨' },
-]
+  { id: 'color', name: '颜色', icon: '🎨' },
+])
 
 // Mock 单词数据
 const allWords = ref<NotebookWord[]>([
