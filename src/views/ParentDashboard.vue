@@ -249,63 +249,23 @@ onMounted(async () => {
       reportApi.getHistory(),
     ])
     report.value = weeklyData
-    historyReports.value = (historyData.reports || []).slice(1) // 排除当前周报
-  } catch {
-    // 使用模拟数据
-    report.value = {
-      childId: '',
-      childName: '小明',
-      weekStart: new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0],
-      weekEnd: new Date().toISOString().split('T')[0],
-      summary: {
-        totalDays: 5,
-        totalMinutes: 68,
-        newWords: 12,
-        wordsReviewed: 25,
-        sentencesSpoken: 18,
-        starsEarned: 32,
-        avgCorrectRate: 0.78,
-        currentStreak: 12,
-        longestStreak: 15,
-      },
-      emotion: {
-        startPleasure: 0.55,
-        endPleasure: 0.72,
-        avgPleasure: 0.65,
-        trend: 'up',
-        highlight: '本周心情逐步提升，学习状态越来越好！🌟',
-      },
-      pet: {
-        name: '豆豆',
-        stage: 'sprout',
-        stageProgress: 65,
-        totalMinutes: 180,
-        gradient: '朋友',
-      },
-      learningHighlights: [
-        '坚持学习了 5 天，真了不起！',
-        '掌握了 12 个新单词，词汇量又增加了！',
-        '练习了 18 句口语表达',
-        '收获了 32 颗星星',
-        '已连续 12 天打卡，正在养成好习惯！🔥',
-      ],
-      focusAreas: ['动物', '食物', '学校'],
-      dodoMessage: '这周小明学了5天英语，嗯嗯，感觉不错呢～',
-      parentMessage:
-        '孩子本周学习积极性很高，保持了良好的学习节奏。新学了 12 个单词，掌握情况不错。连续 12 天打卡的习惯值得表扬！',
-      generatedAt: new Date().toISOString(),
-    }
+    historyReports.value = (historyData.reports || []).slice(1)
+  } catch (e: any) {
+    console.error('Failed to load weekly report:', e)
+    // 不再静默降级为 mock 数据，保留 null 让 UI 显示错误状态
   }
 
   try {
     const childData = await parentApi.getSettings('me')
     settings.value = childData
-  } catch {
+  } catch (e: any) {
+    console.error('Failed to load parent settings:', e)
+    // 使用安全默认值（非 mock，而是合理的初始值）
     settings.value = {
       dailyLimitMinutes: 30,
       disabledStartHour: 22,
       disabledEndHour: 6,
-      notificationEnabled: true,
+      notificationEnabled: false,
     }
   }
 

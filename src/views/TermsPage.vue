@@ -75,7 +75,7 @@
         <h2>8. 联系我们</h2>
         <ul>
           <li>邮箱：support@magic-english.cn</li>
-          <li>客服电话：400-XXX-XXXX</li>
+          <li>客服邮箱：support@magic-english.app</li>
         </ul>
       </section>
     </div>

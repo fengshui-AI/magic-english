@@ -16,6 +16,26 @@ declare global {
 }
 
 /**
+ * 获取 JWT secret，生产环境强制要求环境变量
+ * 开发环境可使用默认值方便本地调试
+ */
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET
+  if (secret && secret.length >= 32) {
+    return secret
+  }
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'FATAL: JWT_SECRET environment variable must be set in production (min 32 chars). ' +
+        'Generate one with: openssl rand -hex 64',
+    )
+  }
+  // 开发环境使用固定默认值（仅用于本地开发！）
+  console.warn('⚠️  Using default JWT_SECRET for development. DO NOT use in production!')
+  return 'magic-english-dev-secret-do-not-use-in-prod'
+}
+
+/**
  * JWT 认证中间件 — 解析 Bearer token 并将 payload 存入 req.jwtPayload
  */
 export function authMiddleware(req: Request, res: Response, next: NextFunction) {
@@ -26,7 +46,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
   }
 
   try {
-    const secret = process.env.JWT_SECRET || 'dev-secret'
+    const secret = getJwtSecret()
     const payload = jwt.verify(authHeader.slice(7), secret) as JwtPayload
     req.jwtPayload = payload
     next()

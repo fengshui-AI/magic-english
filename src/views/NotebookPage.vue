@@ -170,9 +170,15 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { fetchWords, fetchTopics, wordsStore } from '../stores/words'
+import { fetchWords, fetchTopics, wordsStore } from '../stores/words'
 
 const router = useRouter()
 const toast = ref('')
+const loading = ref(true)
+const error = ref<string | null>(null)
+const loading = ref(true)
+const error = ref<string | null>(null)
 
 interface NotebookWord {
   id: string
@@ -464,8 +470,48 @@ function showToast(msg: string) {
   }, 2000)
 }
 
-onMounted(() => {
-  // 接入真实数据后可替换 mock
+onMounted(async () => {
+  loading.value = true
+  error.value = null
+  try {
+    // 加载主题列表
+    const topicList = await fetchTopics()
+    if (topicList.length > 0) {
+      themes.value = topicList
+        .map((t: string) => ({
+          id: t,
+          name: THEME_META[t]?.name || t,
+          icon: THEME_META[t]?.icon || '📖',
+        }))
+    }
+
+    // 加载用户已学单词（通过 progress API）
+    const result = await fetchWords({ limit: 50 })
+    if (result && result.items.length > 0) {
+      allWords.value = result.items.map((w) => {
+        const style = THEME_STYLES[w.theme || ''] || { emoji: '📖', bg: '#f0e6ff' }
+        const progress = (w as any).progress
+        return {
+          id: w.id,
+          word: w.word,
+          meaning: w.translation,
+          phonetic: w.phonetic || undefined,
+          emoji: style.emoji,
+          bg: style.bg,
+          theme: w.theme || 'school',
+          mastery: progress?.avgScore ? Math.round(progress.avgScore * 100) : 0,
+          learnedAt: w.createdAt?.split('T')[0] || '',
+          example: `Let's learn "${w.word}"!`,
+          exampleCn: `我们来学"${w.translation}"吧！`,
+        }
+      })
+    }
+  } catch (e: any) {
+    error.value = e.message || '加载生词本失败'
+    console.error('Failed to load notebook:', e)
+  } finally {
+    loading.value = false
+  }
 })
 </script>
 

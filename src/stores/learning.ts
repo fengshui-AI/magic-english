@@ -9,7 +9,7 @@ import type {
 import type { DailyTask, LearningRecord } from '../types'
 
 // ============================================================
-// 学习进度 Store（接入真实 API，保留 mock 降级）
+// 学习进度 Store
 // ============================================================
 
 interface LearningStore {
@@ -36,47 +36,17 @@ export const learningStore = reactive<LearningStore>({
   history: [],
   loading: false,
   error: null,
-  // 兼容旧视图默认值
   grade: 3,
   unit: 1,
   completedLessons: [],
-  streak: 5,
-  todayMinutes: 15,
-  totalStars: 42,
-  weakWords: ['beautiful', 'because', 'favorite'],
+  streak: 0,
+  todayMinutes: 0,
+  totalStars: 0,
+  weakWords: [],
 })
 
 // ============================================================
-// Mock 降级数据（API 不可用时使用）
-// ============================================================
-
-const DEFAULT_PROGRESS = {
-  summary: {
-    totalMinutes: 45,
-    totalWordsLearned: 23,
-    totalSentencesSpoken: 12,
-    totalStars: 42,
-    currentStreak: 5,
-    totalSessions: 7,
-  },
-  vocabulary: {
-    new: 10,
-    learning: 8,
-    review: 5,
-    mastered: 0,
-    total: 23,
-  },
-  pendingReview: 5,
-}
-
-const DEFAULT_TODAY = {
-  today: null,
-  pendingReviews: 5,
-  masteredWords: 0,
-}
-
-// ============================================================
-// API 调用（带 mock 降级）
+// API 调用
 // ============================================================
 
 /** 获取学习进度总览 */
@@ -86,14 +56,12 @@ export async function fetchProgress() {
   try {
     const data = await learningApi.progress()
     learningStore.progress = data
-    // 同步兼容属性
     learningStore.streak = data.summary.currentStreak
     learningStore.totalStars = data.summary.totalStars
     return data
-  } catch {
-    // mock 降级
-    learningStore.progress = DEFAULT_PROGRESS as LearningProgressSummary
-    return DEFAULT_PROGRESS as LearningProgressSummary
+  } catch (e: any) {
+    learningStore.error = e.message || '获取学习进度失败'
+    return null
   } finally {
     learningStore.loading = false
   }
@@ -105,9 +73,9 @@ export async function fetchToday() {
     const data = await learningApi.today()
     learningStore.today = data
     return data
-  } catch {
-    learningStore.today = DEFAULT_TODAY
-    return DEFAULT_TODAY
+  } catch (e: any) {
+    learningStore.error = e.message || '获取今日摘要失败'
+    return null
   }
 }
 
@@ -117,18 +85,9 @@ export async function fetchDailyPlan() {
     const data = await learningApi.dailyPlan()
     learningStore.dailyPlan = data
     return data
-  } catch {
-    // mock 降级
-    learningStore.dailyPlan = {
-      plan: {
-        reviewCount: 5,
-        newWordCount: 3,
-        reviewQueue: [],
-        newWords: [],
-        suggestedOrder: [],
-      },
-    }
-    return learningStore.dailyPlan
+  } catch (e: any) {
+    learningStore.error = e.message || '获取学习计划失败'
+    return null
   }
 }
 
@@ -139,12 +98,10 @@ export async function fetchHistory(from?: string, to?: string) {
     const data = await learningApi.history({ from, to })
     learningStore.history = data.records
     return data
-  } catch {
+  } catch (e: any) {
+    learningStore.error = e.message || '获取学习历史失败'
     learningStore.history = []
-    return {
-      records: [],
-      summary: { totalSessions: 0, totalMinutes: 0, totalWords: 0, totalStars: 0 },
-    }
+    return null
   } finally {
     learningStore.loading = false
   }

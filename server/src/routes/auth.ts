@@ -32,8 +32,24 @@ const loginSchema = z.object({
   phone: z.string().min(11).max(20),
 })
 
+/**
+ * 获取 JWT secret（与 auth middleware 共享逻辑）
+ */
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET
+  if (secret && secret.length >= 32) {
+    return secret
+  }
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'FATAL: JWT_SECRET environment variable must be set in production (min 32 chars).',
+    )
+  }
+  return 'magic-english-dev-secret-do-not-use-in-prod'
+}
+
 function signToken(userId: string, role: string): string {
-  return jwt.sign({ userId, role }, process.env.JWT_SECRET || 'dev-secret', { expiresIn: '7d' })
+  return jwt.sign({ userId, role }, getJwtSecret(), { expiresIn: '7d' })
 }
 
 // POST /api/v1/auth/register

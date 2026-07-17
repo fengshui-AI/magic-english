@@ -1,5 +1,25 @@
 <template>
   <div class="learn-page">
+    <!-- 加载中 -->
+    <div v-if="wordsLoading" class="loading-state">
+      <div class="loading-spinner"></div>
+      <p>正在准备今天的单词...</p>
+    </div>
+
+    <!-- 加载失败 -->
+    <div v-else-if="wordsError" class="error-state">
+      <p>😢 {{ wordsError }}</p>
+      <button class="retry-btn" @click="loadTodayWords">重新加载</button>
+    </div>
+
+    <!-- 单词为空 -->
+    <div v-else-if="words.length === 0" class="empty-state">
+      <p>📭 今天还没有学习任务哦</p>
+      <button class="retry-btn" @click="loadTodayWords">刷新试试</button>
+    </div>
+
+    <!-- 正常学习流程 -->
+    <template v-else>
     <!-- 顶部导航栏 -->
     <div class="learn-header">
       <button class="back-btn" @click="handleBack">
@@ -251,14 +271,17 @@
         </div>
       </div>
     </transition>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { petStore, feedPet } from '../stores/pet'
 import { triggerEmotionEvent } from '../stores/emotion'
+import { fetchDailyPlan } from '../stores/learning'
+import { fetchWords } from '../stores/words'
 
 const router = useRouter()
 
@@ -275,53 +298,88 @@ interface LearnWord {
   bg?: string
 }
 
-const words = ref<LearnWord[]>([
-  {
-    word: 'apple',
-    phonetic: '/ˈæp.əl/',
-    meaning: '苹果',
-    example: 'I like to eat an apple every day.',
-    exampleCn: '我喜欢每天吃一个苹果。',
-    emoji: '🍎',
-    bg: '#ffe0e0',
-  },
-  {
-    word: 'beautiful',
-    phonetic: '/ˈbjuː.tɪ.fəl/',
-    meaning: '美丽的',
-    example: 'The flowers are very beautiful.',
-    exampleCn: '这些花非常美丽。',
-    emoji: '🌸',
-    bg: '#ffe0f0',
-  },
-  {
-    word: 'because',
-    phonetic: '/bɪˈkɒz/',
-    meaning: '因为',
-    example: 'I am happy because I passed the test.',
-    exampleCn: '我很开心因为我通过了考试。',
-    emoji: '💡',
-    bg: '#e0f0ff',
-  },
-  {
-    word: 'favorite',
-    phonetic: '/ˈfeɪ.vər.ɪt/',
-    meaning: '最喜欢的',
-    example: 'My favorite color is blue.',
-    exampleCn: '我最喜欢的颜色是蓝色。',
-    emoji: '💙',
-    bg: '#e0e8ff',
-  },
-  {
-    word: 'dragon',
-    phonetic: '/ˈdræɡ.ən/',
-    meaning: '龙',
-    example: 'The dragon flies in the sky.',
-    exampleCn: '龙在天空中飞翔。',
-    emoji: '🐉',
-    bg: '#e8ffe0',
-  },
-])
+// 主题 → emoji/bg 映射表
+const THEME_STYLES: Record<string, { emoji: string; bg: string }> = {
+  animal: { emoji: '🐾', bg: '#ffe0e0' },
+  space: { emoji: '🚀', bg: '#e0e0ff' },
+  school: { emoji: '📚', bg: '#e0f0ff' },
+  food: { emoji: '🍎', bg: '#fff0e0' },
+  body: { emoji: '🦵', bg: '#ffe8f0' },
+  color: { emoji: '🎨', bg: '#f0e8ff' },
+  weather: { emoji: '🌤️', bg: '#e0f8ff' },
+  sports: { emoji: '⚽', bg: '#e8ffe0' },
+  family: { emoji: '👨‍👩‍👧', bg: '#fff8e0' },
+  transport: { emoji: '🚌', bg: '#e8f0ff' },
+  nature: { emoji: '🌿', bg: '#e0ffe8' },
+}
+
+function themeStyle(theme?: string | null) {
+  return THEME_STYLES[theme || ''] || { emoji: '📖', bg: '#f0e6ff' }
+}
+
+const words = ref<LearnWord[]>([])
+const wordsLoading = ref(true)
+const wordsError = ref<string | null>(null)
+
+/** 从每日计划加载今日单词 */
+async function loadTodayWords() {
+  wordsLoading.value = true
+  wordsError.value = null
+  try {
+    // 先获取每日计划（含今日待学单词 ID）
+    const plan = await fetchDailyPlan()
+    const wordIds = plan?.plan?.newWords || []
+
+    if (wordIds.length === 0) {
+      // 没有新单词计划，直接从词库取 5 个
+      const result = await fetchWords({ limit: 5 })
+      if (result && result.items.length > 0) {
+        words.value = result.items.map((w) => {
+          const style = themeStyle(w.theme)
+          return {
+            word: w.word,
+            phonetic: w.phonetic || undefined,
+            meaning: w.translation,
+            example: `Let's learn the word "${w.word}"!`,
+            exampleCn: `我们来学单词"${w.translation}"吧！`,
+            emoji: style.emoji,
+            bg: style.bg,
+          }
+        })
+      }
+    } else {
+      // 从词库获取对应单词
+      const result = await fetchWords({ limit: 20 })
+      if (result && result.items.length > 0) {
+        const wordMap = new Map(result.items.map((w) => [w.id, w]))
+        words.value = wordIds
+          .map((id: string) => wordMap.get(id))
+          .filter(Boolean)
+          .map((w) => {
+            const style = themeStyle(w!.theme)
+            return {
+              word: w!.word,
+              phonetic: w!.phonetic || undefined,
+              meaning: w!.translation,
+              example: `Let's learn the word "${w!.word}"!`,
+              exampleCn: `我们来学单词"${w!.translation}"吧！`,
+              emoji: style.emoji,
+              bg: style.bg,
+            }
+          })
+      }
+    }
+  } catch (e: any) {
+    wordsError.value = e.message || '加载单词失败'
+    console.error('Failed to load words:', e)
+  } finally {
+    wordsLoading.value = false
+  }
+}
+
+onMounted(() => {
+  loadTodayWords()
+})
 
 const currentIndex = ref(0)
 const currentWord = computed(() => words.value[currentIndex.value] || null)
@@ -621,6 +679,47 @@ function showToast(msg: string) {
   min-height: 100vh;
   background: linear-gradient(180deg, #f8f7ff 0%, #f0ecff 100%);
   padding-bottom: 40px;
+}
+
+/* 加载 / 错误 / 空状态 */
+.loading-state,
+.error-state,
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 16px;
+  color: var(--text-secondary, #666);
+  font-size: 16px;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e0e0e0;
+  border-top-color: #8b5cf6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.retry-btn {
+  padding: 10px 24px;
+  background: #8b5cf6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.retry-btn:hover {
+  background: #7c3aed;
 }
 
 /* 顶部导航 */

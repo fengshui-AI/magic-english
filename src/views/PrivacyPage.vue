@@ -67,7 +67,7 @@
         <p>如对隐私政策有任何疑问，请联系：</p>
         <ul>
           <li>邮箱：privacy@magic-english.cn</li>
-          <li>客服电话：400-XXX-XXXX</li>
+          <li>客服邮箱：support@magic-english.app</li>
         </ul>
       </section>
     </div>

@@ -13,14 +13,24 @@ import { dialogueRoutes } from './routes/dialogue.js'
 
 const app = express()
 
-// Middleware
-const corsOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:4173')
-  .split(',')
-  .map((s) => s.trim())
+// CORS 配置：开发环境宽松，生产环境严格白名单
+const corsOrigins = (() => {
+  // 生产环境：必须显式设置 CORS_ORIGINS
+  if (process.env.NODE_ENV === 'production') {
+    const origins = process.env.CORS_ORIGINS
+    if (!origins) {
+      console.error('⚠️  CORS_ORIGINS not set in production — allowing only same-origin requests')
+      return []
+    }
+    return origins.split(',').map((s) => s.trim()).filter(Boolean)
+  }
+  // 开发环境：允许常见开发端口
+  return ['http://localhost:5173', 'http://localhost:4173', 'http://127.0.0.1:5173']
+})()
 
 app.use(
   cors({
-    origin: corsOrigins,
+    origin: corsOrigins.length > 0 ? corsOrigins : true, // true = 同源请求
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,

@@ -38,9 +38,9 @@ interface PetStore extends PetDisplay {
   error: string | null
 }
 
-// 默认 mock 数据（未登录或 API 不可用时使用）
+// 默认初始值（未登录时使用）
 const DEFAULT_PET: PetDisplay = {
-  name: '小魔法',
+  name: '豆豆',
   level: 1,
   stage: 'egg',
   exp: 0,
