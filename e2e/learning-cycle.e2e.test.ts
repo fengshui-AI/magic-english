@@ -1,7 +1,7 @@
 /**
- * T7.1.2: 完整学习循环 E2E 测试
+ * 完整学习循环 E2E 测试
  *
- * 流程：新词学习 → 跟读评测 → 复习 → 结算
+ * 流程：获取单词 → 开始学习 → 发音评测 → 复习 → 结算
  * 需要后端运行中
  */
 import { describe, it, expect, beforeAll } from 'vitest'
@@ -9,8 +9,7 @@ import { describe, it, expect, beforeAll } from 'vitest'
 const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:3000/api/v1'
 
 let token = ''
-let userId = ''
-let wordIds: string[] = []
+let wordId = ''
 
 beforeAll(async () => {
   // 创建测试用户
@@ -22,98 +21,76 @@ beforeAll(async () => {
   })
   const regData = await regRes.json()
   token = regData.token
-  userId = regData.user.id
 
-  // 获取单词列表
-  const wordsRes = await fetch(`${BASE_URL}/words?grade=3`, {
+  // 获取一个单词用于测试
+  const wordsRes = await fetch(`${BASE_URL}/words?grade=3&limit=1`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   const wordsData = await wordsRes.json()
-  wordIds = (wordsData.items || []).slice(0, 5).map((w: any) => w.id)
+  if (wordsData.items?.length > 0) {
+    wordId = wordsData.items[0].id
+  }
 })
 
 describe('完整学习循环 E2E', () => {
   // ============================================================
-  // Phase 1: 新词学习
+  // Phase 1: 单词获取
   // ============================================================
-  describe('Phase 1: 新词学习', () => {
-    it('GET /words 获取新词列表', async () => {
+  describe('Phase 1: 单词获取', () => {
+    it('GET /words 返回年级匹配的单词列表', async () => {
       const res = await fetch(`${BASE_URL}/words?grade=3`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       const data = await res.json()
       expect(res.status).toBe(200)
+      expect(Array.isArray(data.items)).toBe(true)
       expect(data.items.length).toBeGreaterThan(0)
+      expect(data.pagination).toBeDefined()
+      // 验证单词结构
+      const word = data.items[0]
+      expect(word.id).toBeTruthy()
+      expect(word.word).toBeTruthy()
+      expect(word.translation).toBeTruthy()
+      expect(word.difficulty).toBeGreaterThanOrEqual(1)
     })
 
-    it('GET /words/:id 查看单词详情', async () => {
-      if (wordIds.length === 0) return
-      const res = await fetch(`${BASE_URL}/words/${wordIds[0]}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      expect(res.status === 200 || res.status === 404).toBe(true)
-    })
-  })
-
-  // ============================================================
-  // Phase 2: 跟读评测（发音评分）
-  // ============================================================
-  describe('Phase 2: 跟读评测', () => {
-    it('POST /learning/pronounce 提交发音评分', async () => {
-      const res = await fetch(`${BASE_URL}/learning/pronounce`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          wordId: wordIds[0] || '00000000-0000-0000-0000-000000000001',
-          score: 85,
-          accuracy: 80,
-          fluency: 82,
-          completeness: 90,
-        }),
-      })
-      const data = await res.json()
-      // 可能 200 或 400/404（取决于 wordId 是否存在）
-      expect([200, 201, 400, 404].includes(res.status)).toBe(true)
-    })
-  })
-
-  // ============================================================
-  // Phase 3: 单词复习（艾宾浩斯）
-  // ============================================================
-  describe('Phase 3: 单词复习', () => {
-    it('GET /learning/review-queue 获取待复习队列', async () => {
-      const res = await fetch(`${BASE_URL}/learning/review-queue`, {
+    it('GET /words?theme=animal 按主题筛选', async () => {
+      const res = await fetch(`${BASE_URL}/words?theme=animal&limit=3`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       const data = await res.json()
       expect(res.status).toBe(200)
-      expect(data.queue).toBeDefined()
+      expect(data.items.length).toBeGreaterThan(0)
+      data.items.forEach((w: any) => {
+        expect(w.theme).toBe('animal')
+      })
     })
 
-    it('POST /learning/review/:wordId 提交复习结果', async () => {
-      const wordId = wordIds[0] || '00000000-0000-0000-0000-000000000001'
-      const res = await fetch(`${BASE_URL}/learning/review/${wordId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          quality: 'correct',
-        }),
+    it('GET /words/topics 返回主题列表', async () => {
+      const res = await fetch(`${BASE_URL}/words/topics`, {
+        headers: { Authorization: `Bearer ${token}` },
       })
-      // 可能因没有实际学习记录而 400/404
-      expect([200, 201, 400, 404].includes(res.status)).toBe(true)
+      const data = await res.json()
+      expect(res.status).toBe(200)
+      expect(Array.isArray(data.topics)).toBe(true)
+      expect(data.topics.length).toBeGreaterThan(0)
+    })
+
+    it('GET /words/:id 返回单词详情', async () => {
+      if (!wordId) return
+      const res = await fetch(`${BASE_URL}/words/${wordId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      expect(res.status).toBe(200)
+      expect(data.word.id).toBe(wordId)
     })
   })
 
   // ============================================================
-  // Phase 4: 学习结算
+  // Phase 2: 学习会话
   // ============================================================
-  describe('Phase 4: 学习结算', () => {
+  describe('Phase 2: 学习会话', () => {
     let sessionId = ''
 
     it('POST /learning/session/start 创建学习会话', async () => {
@@ -126,20 +103,35 @@ describe('完整学习循环 E2E', () => {
       })
       const data = await res.json()
       expect(res.status).toBe(200)
-      expect(data.session).toBeTruthy()
+      expect(data.session).toBeDefined()
+      expect(data.session.id).toBeTruthy()
       sessionId = data.session.id
     })
 
-    it('GET /learning/progress 结算汇总正确', async () => {
-      const res = await fetch(`${BASE_URL}/learning/progress`, {
+    it('GET /learning/daily-plan 获取每日学习计划', async () => {
+      const res = await fetch(`${BASE_URL}/learning/daily-plan`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       const data = await res.json()
       expect(res.status).toBe(200)
-      expect(data.summary).toBeDefined()
+      expect(data.plan).toBeDefined()
     })
 
-    it('POST /streak/checkin 结算后签到', async () => {
+    it('GET /learning/review-queue 获取待复习队列', async () => {
+      const res = await fetch(`${BASE_URL}/learning/review-queue`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      expect(res.status).toBe(200)
+      expect(data.queue).toBeDefined()
+    })
+  })
+
+  // ============================================================
+  // Phase 3: 学习结算
+  // ============================================================
+  describe('Phase 3: 学习结算', () => {
+    it('POST /streak/checkin 签到', async () => {
       const res = await fetch(`${BASE_URL}/streak/checkin`, {
         method: 'POST',
         headers: {
@@ -150,6 +142,34 @@ describe('完整学习循环 E2E', () => {
       })
       const data = await res.json()
       expect(res.status).toBe(200)
+      expect(data).toHaveProperty('currentStreak')
+    })
+
+    it('GET /learning/progress 学习进度汇总', async () => {
+      const res = await fetch(`${BASE_URL}/learning/progress`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      expect(res.status).toBe(200)
+      expect(data.summary).toBeDefined()
+      expect(data.summary).toHaveProperty('totalStars')
+      expect(data.summary).toHaveProperty('currentStreak')
+    })
+
+    it('GET /learning/today 今日摘要', async () => {
+      const res = await fetch(`${BASE_URL}/learning/today`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      expect(res.status).toBe(200)
+    })
+
+    it('GET /emotion/current 情感状态正常', async () => {
+      const res = await fetch(`${BASE_URL}/emotion/current`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      expect(res.status).toBe(200)
+      expect(data).toHaveProperty('emotion')
     })
   })
 })

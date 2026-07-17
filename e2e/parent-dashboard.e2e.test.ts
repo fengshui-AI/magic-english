@@ -1,7 +1,7 @@
 /**
- * T7.1 补充: 家长端 E2E 测试
+ * 家长端 E2E 测试
  *
- * 验证家长端所有 API 可用
+ * 验证：画像查询 → 周报生成 → 设置管理 → 健康检查
  * 需要后端运行中
  */
 import { describe, it, expect, beforeAll } from 'vitest'
@@ -37,25 +37,25 @@ beforeAll(async () => {
   childUserId = childData.user.id
 })
 
-describe('家长端 API E2E', () => {
+describe('家长端 E2E', () => {
   // ============================================================
   // 画像 API
   // ============================================================
   describe('画像 API', () => {
-    it('GET /profile/full 返回完整画像', async () => {
+    it('GET /profile/full 返回完整画像（含学习风格）', async () => {
       const res = await fetch(`${BASE_URL}/profile/full`, {
         headers: { Authorization: `Bearer ${childToken}` },
       })
       const data = await res.json()
       expect(res.status).toBe(200)
-      expect(data.learningStyle).toBeDefined()
+      expect(data).toHaveProperty('learningStyle')
+      expect(data).toHaveProperty('interests')
     })
 
-    it('GET /profile/learning-style 返回学习风格', async () => {
+    it('GET /profile/learning-style 返回学习风格详情', async () => {
       const res = await fetch(`${BASE_URL}/profile/learning-style`, {
         headers: { Authorization: `Bearer ${childToken}` },
       })
-      const data = await res.json()
       expect(res.status).toBe(200)
     })
 
@@ -63,7 +63,6 @@ describe('家长端 API E2E', () => {
       const res = await fetch(`${BASE_URL}/profile/interests`, {
         headers: { Authorization: `Bearer ${childToken}` },
       })
-      const data = await res.json()
       expect(res.status).toBe(200)
     })
 
@@ -71,7 +70,6 @@ describe('家长端 API E2E', () => {
       const res = await fetch(`${BASE_URL}/profile/content-signals`, {
         headers: { Authorization: `Bearer ${childToken}` },
       })
-      const data = await res.json()
       expect(res.status).toBe(200)
     })
   })
@@ -84,10 +82,11 @@ describe('家长端 API E2E', () => {
       const res = await fetch(`${BASE_URL}/reports/weekly`, {
         headers: { Authorization: `Bearer ${parentToken}` },
       })
+      // 没有学习数据时返回 404 是正常的
       expect([200, 404].includes(res.status)).toBe(true)
     })
 
-    it('GET /reports/weekly/history 获取历史周报', async () => {
+    it('GET /reports/weekly/history 返回历史周报数组', async () => {
       const res = await fetch(`${BASE_URL}/reports/weekly/history`, {
         headers: { Authorization: `Bearer ${parentToken}` },
       })
@@ -105,34 +104,38 @@ describe('家长端 API E2E', () => {
         },
         body: JSON.stringify({ childId: childUserId }),
       })
-      // 可能因为没有足够学习数据而失败，但不应 500
+      // 可能因为缺少学习数据而失败，但不应该 500
       expect(res.status).not.toBe(500)
     })
   })
 
   // ============================================================
-  // 家长设置 API
+  // 家长设置
   // ============================================================
-  describe('家长设置 API', () => {
-    it('GET /users/me 获取用户信息（作为设置端点）', async () => {
-      const res = await fetch(`${BASE_URL}/users/me`, {
-        headers: { Authorization: `Bearer ${parentToken}` },
-      })
-      expect([200, 404].includes(res.status)).toBe(true)
-    })
-
-    it('PATCH /users/:id 更新用户信息', async () => {
+  describe('家长设置', () => {
+    it('PATCH /users/:id 更新名称', async () => {
       const res = await fetch(`${BASE_URL}/users/${parentUserId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${parentToken}`,
         },
-        body: JSON.stringify({
-          name: '家长测试(已更新)',
-        }),
+        body: JSON.stringify({ name: '家长测试(已更新)' }),
       })
-      expect([200, 201, 404].includes(res.status)).toBe(true)
+      expect(res.status).toBe(200)
+    })
+
+    it('PATCH /users/:id 越权修改他人信息被拒绝', async () => {
+      const res = await fetch(`${BASE_URL}/users/${childUserId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${parentToken}`,
+        },
+        body: JSON.stringify({ name: 'hacked' }),
+      })
+      // 应该拒绝：parent 不能修改 child 的 profile（除非有 parent_link）
+      expect(res.status).not.toBe(200)
     })
   })
 
@@ -141,10 +144,7 @@ describe('家长端 API E2E', () => {
   // ============================================================
   describe('健康检查', () => {
     it('GET /health 返回 ok', async () => {
-      const healthUrl = process.env.E2E_BASE_URL
-        ? process.env.E2E_BASE_URL.replace('/api/v1', '/health')
-        : 'http://localhost:3000/health'
-      const res = await fetch(healthUrl)
+      const res = await fetch('http://localhost:3000/health')
       const data = await res.json()
       expect(res.status).toBe(200)
       expect(data.status).toBe('ok')
