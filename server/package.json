@@ -27,6 +27,7 @@
     "express": "^4.21.0",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.13.0",
+    "tencentcloud-sdk-nodejs": "^4.1.269",
     "zod": "^3.23.0"
   },
   "devDependencies": {

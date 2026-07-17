@@ -10,6 +10,7 @@ import { streakRoutes } from './routes/streak.js'
 import { profileRoutes } from './routes/profile.js'
 import { reportRoutes } from './routes/reports.js'
 import { dialogueRoutes } from './routes/dialogue.js'
+import { speechRoutes } from './routes/speech.js'
 
 const app = express()
 
@@ -61,6 +62,7 @@ app.use('/api/v1/streak', streakRoutes)
 app.use('/api/v1/profile', profileRoutes)
 app.use('/api/v1/reports', reportRoutes)
 app.use('/api/v1/dialogue', dialogueRoutes)
+app.use('/api/v1/speech', speechRoutes)
 
 // Global error handler
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

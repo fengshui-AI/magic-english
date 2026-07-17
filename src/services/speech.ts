@@ -1,9 +1,9 @@
 // ============================================================
-// 语音服务 — 浏览器端 Web Speech API 封装
+// 语音服务 — 浏览器端 + 服务端混合方案
 //
-// 真实 TTS 使用浏览器内置 speechSynthesis
-// 真实 ASR 使用浏览器内置 SpeechRecognition (Webkit)
-// 发音评测通过后端 API
+// TTS：优先服务端腾讯云（发音标准），降级 Web Speech API
+// ASR：优先服务端腾讯云（准确率高），降级 Web Speech API
+// 发音评测：必须通过服务端 API
 // ============================================================
 
 // TypeScript 类型声明
@@ -358,4 +358,109 @@ export async function requestAudioPermission(): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+// ============================================================
+// 服务端语音 API 调用（腾讯云，主方案）
+// ============================================================
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
+
+/** 调用服务端 TTS，返回 base64 音频 */
+export async function serverTTS(
+  text: string,
+  voice: 'dodo' | 'teacher' = 'dodo',
+  speed = 1.0,
+): Promise<{ audioBase64: string; duration: number } | null> {
+  try {
+    const res = await fetch(`${API_BASE}/v1/speech/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voice, speed }),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    return { audioBase64: data.audioBase64 || '', duration: data.duration || 0 }
+  } catch {
+    return null
+  }
+}
+
+/** 调用服务端 TTS 并直接播放 */
+export async function speakServerTTS(
+  text: string,
+  voice: 'dodo' | 'teacher' = 'dodo',
+): Promise<boolean> {
+  const result = await serverTTS(text, voice)
+  if (!result?.audioBase64) return false
+
+  try {
+    const audio = new Audio(`data:audio/mp3;base64,${result.audioBase64}`)
+    await audio.play()
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** 调用服务端 ASR 识别音频 */
+export async function serverASR(
+  audioBase64: string,
+  language: 'en' | 'zh' | 'auto' = 'auto',
+  context?: string[],
+): Promise<{ text: string; confidence: number } | null> {
+  try {
+    const res = await fetch(`${API_BASE}/v1/speech/asr`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ audioData: audioBase64, language, context }),
+    })
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+/** 调用服务端发音评测 */
+export async function serverEvaluate(
+  referenceText: string,
+  audioBase64: string,
+): Promise<{
+  overall: number
+  accuracy: number
+  fluency: number
+  completeness: number
+  feedback: string
+  wordScores?: Array<{ word: string; score: number }>
+} | null> {
+  try {
+    const res = await fetch(`${API_BASE}/v1/speech/evaluate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ referenceText, audioData: audioBase64 }),
+    })
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+/** 智能 TTS：先尝试服务端，失败则降级到 Web Speech API */
+export async function smartSpeak(
+  text: string,
+  voice: 'dodo' | 'teacher' = 'dodo',
+  fallbackOptions?: Partial<TTSOptions>,
+): Promise<void> {
+  // 优先服务端
+  const serverOk = await speakServerTTS(text, voice)
+  if (serverOk) return
+
+  // 降级到浏览器 TTS
+  speakText({
+    text,
+    voice,
+    ...fallbackOptions,
+  })
 }
