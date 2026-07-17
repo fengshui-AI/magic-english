@@ -1,0 +1,37 @@
+{
+  "envId": "trial.magic-english-main-d2cp777306bc7",
+  "version": "2.0",
+  "framework": {
+    "name": "vue",
+    "plugins": {
+      "client": {
+        "use": "@cloudbase/framework-plugin-website",
+        "inputs": {
+          "buildCommand": "npm run build",
+          "outputPath": "dist",
+          "cloudPath": "/",
+          "envVariables": {}
+        }
+      },
+      "server": {
+        "use": "@cloudbase/framework-plugin-container",
+        "inputs": {
+          "containerName": "magic-english-api",
+          "containerPort": 3000,
+          "dockerfile": "server/Dockerfile",
+          "servicePath": "/server",
+          "uploadType": "package",
+          "envVariables": {
+            "NODE_ENV": "production",
+            "DATABASE_URL": "postgresql://magic_api_user:Tengfei0612$@sh-postgres-fk627k8w.sql.tencentcdb.com:24079/postgres",
+            "JWT_SECRET": "magic-english-jwt-secret-2026",
+            "CORS_ORIGINS": "https://magic-english-main-d2cp777306bc7-1413580527.tcloudbaseapp.com,http://localhost:5173,http://localhost:4173"
+          }
+        }
+      }
+    }
+  },
+  "cloudrun": {
+    "name": "magic-english-api"
+  }
+}

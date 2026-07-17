@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>魔法英语 - 陪伴式英语学习助手</title>
+<style>
+:root {
+  --primary: #6c5ce7;
+  --primary-light: #a29bfe;
+  --primary-dark: #4a3db3;
+  --secondary: #fd79a8;
+  --accent: #fdcb6e;
+  --success: #00b894;
+  --danger: #e17055;
+  --bg: #f8f7ff;
+  --card-bg: #ffffff;
+  --text: #2d3436;
+  --text-light: #636e72;
+  --text-muted: #b2bec3;
+  --border: #e8e8f0;
+  --shadow: 0 4px 20px rgba(108,92,231,0.1);
+  --shadow-hover: 0 8px 30px rgba(108,92,231,0.18);
+  --radius: 16px;
+  --radius-sm: 10px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg); color: var(--text); min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+.page { padding: 20px 16px 100px; max-width: 480px; margin: 0 auto; min-height: 100vh; display:none; }
+.page.active { display:block; }
+.page-header { text-align:center; margin-bottom:24px; }
+.page-header h1 {
+  font-size:24px; font-weight:700;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+.page-header p { color: var(--text-light); font-size:14px; margin-top:6px; }
+.card {
+  background: var(--card-bg); border-radius: var(--radius); padding:20px;
+  box-shadow: var(--shadow); transition: all 0.3s ease;
+}
+.card:hover { box-shadow: var(--shadow-hover); transform: translateY(-2px); }
+.section { margin-bottom:24px; }
+.section-title { font-size:17px; font-weight:700; margin-bottom:12px; }
+.bottom-nav {
+  position:fixed; bottom:0; left:50%; transform:translateX(-50%); max-width:480px; width:100%;
+  background: var(--card-bg); border-top:1px solid var(--border); display:flex;
+  justify-content:space-around; padding:8px 0 calc(8px + env(safe-area-inset-bottom));
+  box-shadow:0 -2px 20px rgba(0,0,0,0.05); z-index:100;
+}
+.nav-item {
+  display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 16px;
+  border-radius:8px; cursor:pointer; transition:all 0.2s; text-decoration:none;
+  color: var(--text-muted); font-size:11px; font-weight:500; border:none; background:none;
+}
+.nav-item.active { color: var(--primary); }
+.nav-item:hover { background: var(--bg); }
+.nav-icon { font-size:22px; line-height:1; }
+.toast {
+  position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  background:rgba(0,0,0,0.8); color:white; padding:14px 24px; border-radius:12px;
+  font-size:15px; font-weight:600; z-index:999; pointer-events:none; display:none;
+}
+.toast.show { display:block; }
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+@keyframes fadeInUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+.animate-float { animation: float 3s ease-in-out infinite; }
+.animate-fade-in { animation: fadeInUp 0.6s ease-out forwards; }
+
+/* 首页 */
+.greeting { display:flex; align-items:center; justify-content:center; gap:8px; }
+.greeting-icon { font-size:28px; }
+.progress-card {
+  background: linear-gradient(135deg, #6c5ce7, #a29bfe); color:white; margin-bottom:24px;
+}
+.progress-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+.progress-label { font-size:13px; opacity:0.85; }
+.progress-value { font-size:22px; font-weight:700; display:block; }
+.streak-badge { background:rgba(255,255,255,0.25); padding:6px 12px; border-radius:20px; font-size:13px; font-weight:600; }
+.progress-bar-wrap { height:8px; background:rgba(255,255,255,0.3); border-radius:4px; margin-bottom:12px; overflow:hidden; }
+.progress-bar { height:100%; background:var(--accent); border-radius:4px; transition:width 0.5s ease; }
+.progress-detail { display:flex; justify-content:space-between; font-size:13px; opacity:0.9; }
+.task-list { display:flex; flex-direction:column; gap:10px; }
+.task-item { display:flex; align-items:center; gap:14px; padding:16px; cursor:pointer; }
+.task-item.done { opacity:0.6; }
+.task-icon { font-size:28px; width:44px; height:44px; display:flex; align-items:center; justify-content:center; background:var(--bg); border-radius:12px; }
+.task-content { flex:1; }
+.task-title { font-weight:600; font-size:15px; }
+.task-desc { font-size:12px; color:var(--text-light); margin-top:2px; }
+.task-go { background:var(--primary); color:white; padding:6px 14px; border-radius:20px; font-size:12px; font-weight:700; }
+.task-stars { font-size:12px; }
+.grade-tabs { display:flex; gap:6px; margin-bottom:14px; overflow-x:auto; padding-bottom:4px; }
+.grade-tab {
+  padding:8px 16px; border-radius:20px; border:1.5px solid var(--border); background:white;
+  font-size:13px; font-weight:600; color:var(--text-light); cursor:pointer; white-space:nowrap; transition:all 0.2s;
+}
+.grade-tab.active { background:var(--primary); color:white; border-color:var(--primary); }
+.unit-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.unit-card {
+  padding:16px 12px; background:var(--bg); border-radius:var(--radius-sm); text-align:center;
+  cursor:pointer; transition:all 0.2s; border:2px solid transparent;
+}
+.unit-card.current { border-color:var(--primary); background:rgba(108,92,231,0.06); }
+.unit-card.done { opacity:0.5; }
+.unit-num { font-size:14px; font-weight:600; margin-bottom:6px; }
+.unit-status { font-size:16px; }
+.pet-quick {
+  display:flex; align-items:center; gap:14px; padding:16px; cursor:pointer;
+  background:linear-gradient(135deg,#fff5f5,#f8f0ff);
+}
+.pet-quick-avatar { font-size:40px; }
+.pet-quick-info { flex:1; }
+.pet-quick-name { font-weight:700; font-size:16px; }
+.pet-quick-status { font-size:13px; color:var(--text-light); display:flex; align-items:center; gap:6px; margin-top:2px; }
+.mood-dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+.mood-dot.happy { background:var(--success); }
+.mood-dot.normal { background:var(--accent); }
+.mood-dot.sad { background:var(--danger); }
+.mood-dot.excited { background:var(--secondary); }
+.pet-quick-action { color:var(--primary); font-size:14px; font-weight:600; }
+
+/* 宠物页 */
+.pet-stage { text-align:center; padding:32px 20px; margin-bottom:16px; background:linear-gradient(135deg,#fff5f5,#f0e6ff); }
+.pet-display { position:relative; display:inline-block; margin-bottom:16px; }
+.pet-avatar { font-size:80px; line-height:1; }
+.pet-level-badge {
+  position:absolute; top:-4px; right:-12px; background:var(--accent); color:#333;
+  padding:3px 10px; border-radius:12px; font-size:12px; font-weight:700;
+}
+.pet-name-row { display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:20px; }
+.pet-name { font-size:22px; font-weight:700; }
+.pet-stage-badge { padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600; }
+.pet-stage-badge.egg { background:#ffeaa7; color:#8b6914; }
+.pet-stage-badge.baby { background:#fd79a8; color:white; }
+.pet-stage-badge.young { background:#a29bfe; color:white; }
+.pet-stage-badge.adult { background:#6c5ce7; color:white; }
+.pet-stage-badge.legend { background:linear-gradient(135deg,#fdcb6e,#e17055); color:white; }
+.evo-section { margin-top:8px; }
+.evo-labels { display:flex; justify-content:space-between; font-size:12px; color:var(--text-light); margin-bottom:6px; }
+.evo-bar-wrap { height:6px; background:#eee; border-radius:3px; overflow:hidden; margin-bottom:12px; }
+.evo-bar { height:100%; background:linear-gradient(90deg,var(--primary),var(--secondary)); border-radius:3px; transition:width 0.5s ease; }
+.evo-timeline { display:flex; align-items:center; justify-content:center; gap:0; font-size:18px; }
+.evo-timeline .stage { opacity:0.3; transition:all 0.3s; }
+.evo-timeline .stage.reached { opacity:1; transform:scale(1.15); }
+.evo-line { width:24px; height:2px; background:#ddd; transition:background 0.3s; }
+.evo-line.active { background:var(--primary); }
+.stats-row { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:24px; }
+.stat-card { text-align:center; padding:16px 8px; }
+.stat-icon { font-size:24px; margin-bottom:6px; }
+.stat-label { font-size:12px; color:var(--text-light); }
+.stat-value { font-size:15px; font-weight:700; color:var(--primary); }
+.interact-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+.interact-btn {
+  display:flex; flex-direction:column; align-items:center; gap:6px; padding:20px 12px;
+  border:none; cursor:pointer; text-align:center; font-family:inherit;
+}
+.interact-icon { font-size:32px; }
+.interact-label { font-weight:600; font-size:14px; }
+.interact-desc { font-size:11px; color:var(--text-muted); }
+.skin-list { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+.skin-item {
+  text-align:center; padding:14px 8px; background:var(--bg); border-radius:var(--radius-sm);
+  border:2px solid transparent; transition:all 0.2s;
+}
+.skin-item.owned { cursor:pointer; }
+.skin-item.active { border-color:var(--primary); background:rgba(108,92,231,0.06); }
+.skin-preview { font-size:28px; margin-bottom:6px; }
+.skin-name { font-size:12px; font-weight:600; margin-bottom:2px; }
+.skin-status { font-size:11px; color:var(--text-muted); }
+
+/* 反馈页 */
+.overview-card { background:linear-gradient(135deg,#6c5ce7,#a29bfe); color:white; margin-bottom:16px; }
+.overview-title { font-size:15px; margin-bottom:16px; opacity:0.9; }
+.overview-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+.overview-item { text-align:center; }
+.overview-value { font-size:18px; font-weight:700; }
+.overview-label { font-size:11px; opacity:0.8; margin-top:4px; }
+.calendar-card { margin-bottom:24px; }
+.heatmap { display:grid; grid-template-columns:repeat(10,1fr); gap:4px; margin-bottom:12px; }
+.heatmap-cell {
+  aspect-ratio:1; border-radius:4px; display:flex; align-items:center; justify-content:center;
+  cursor:default; transition:transform 0.2s;
+}
+.heatmap-cell:hover { transform:scale(1.15); }
+.heatmap-cell.lv0 { background:#f0f0f0; }
+.heatmap-cell.lv1 { background:#c8e6c9; }
+.heatmap-cell.lv2 { background:#81c784; }
+.heatmap-cell.lv3 { background:#4caf50; }
+.heatmap-cell.lv4 { background:#2e7d32; }
+.heatmap-cell.lv3 .heatmap-day, .heatmap-cell.lv4 .heatmap-day { color:white; }
+.heatmap-day { font-size:10px; font-weight:600; }
+.heatmap-legend { display:flex; align-items:center; justify-content:center; gap:4px; font-size:11px; color:var(--text-muted); }
+.legend-cell { width:14px; height:14px; border-radius:3px; }
+.legend-cell.lv0 { background:#f0f0f0; } .legend-cell.lv1 { background:#c8e6c9; }
+.legend-cell.lv2 { background:#81c784; } .legend-cell.lv3 { background:#4caf50; }
+.legend-cell.lv4 { background:#2e7d32; }
+.weak-words { display:flex; flex-direction:column; gap:10px; }
+.weak-word { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; }
+.word-text { font-size:18px; font-weight:600; color:var(--danger); }
+.practice-btn {
+  padding:8px 16px; background:var(--primary); color:white; border:none;
+  border-radius:20px; font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s; font-family:inherit;
+}
+.practice-btn:hover { background:var(--primary-dark); transform:scale(1.05); }
+.empty-state { text-align:center; padding:24px; font-size:16px; color:var(--text-muted); }
+.suggestion-card { background:linear-gradient(135deg,#fff9e6,#ffe0f0); margin-bottom:24px; }
+.suggestion-content { display:flex; gap:14px; align-items:flex-start; }
+.suggestion-avatar { font-size:36px; flex-shrink:0; }
+.suggestion-text { font-size:14px; line-height:1.7; color:var(--text); }
+</style>
+</head>
+<body>
+
+<!-- ====== 首页 ====== -->
+<div class="page active" id="page-home">
+  <div class="page-header animate-fade-in">
+    <div class="greeting"><span class="greeting-icon">✨</span><h1>魔法英语</h1></div>
+    <p>和 <strong id="petNameHome">小魔法</strong> 一起快乐学英语吧！</p>
+  </div>
+
+  <div class="progress-card card animate-fade-in">
+    <div class="progress-header">
+      <div class="progress-info"><span class="progress-label">今日学习</span><span class="progress-value" id="todayMin">15 分钟</span></div>
+      <div class="streak-badge">🔥 <span id="streak">5</span> 天连续</div>
+    </div>
+    <div class="progress-bar-wrap"><div class="progress-bar" id="progressBar" style="width:0%"></div></div>
+    <div class="progress-detail"><span>⭐ <span id="totalStars">42</span> 颗星星</span><span>📚 <span id="gradeLabel">3年级 · Unit 1</span></span></div>
+  </div>
+
+  <div class="section animate-fade-in">
+    <h2 class="section-title">📋 今日任务</h2>
+    <div class="task-list" id="taskList"></div>
+  </div>
+
+  <div class="section animate-fade-in">
+    <h2 class="section-title">📖 教材学习</h2>
+    <div class="grade-tabs" id="gradeTabs"></div>
+    <div class="unit-grid" id="unitGrid"></div>
+  </div>
+
+  <div class="pet-quick card animate-fade-in" onclick="switchPage('pet')">
+    <div class="pet-quick-avatar" id="petAvatarHome">🥚</div>
+    <div class="pet-quick-info">
+      <div class="pet-quick-name" id="petNameQuick">小魔法</div>
+      <div class="pet-quick-status"><span class="mood-dot normal" id="moodDotHome"></span><span id="moodTextHome">正常</span></div>
+    </div>
+    <div class="pet-quick-action">去看看 →</div>
+  </div>
+</div>
+
+<!-- ====== 宠物页 ====== -->
+<div class="page" id="page-pet">
+  <div class="page-header animate-fade-in"><h1>🐾 我的宠物</h1><p>陪伴你学习英语的魔法伙伴</p></div>
+
+  <div class="pet-stage card animate-fade-in">
+    <div class="pet-display">
+      <div class="pet-avatar animate-float" id="petEmoji">🥚</div>
+      <div class="pet-level-badge">Lv.<span id="petLevel">1</span></div>
+    </div>
+    <div class="pet-name-row">
+      <h2 class="pet-name" id="petNameBig">小魔法</h2>
+      <span class="pet-stage-badge egg" id="petStageBadge">魔法蛋</span>
+    </div>
+    <div class="evo-section">
+      <div class="evo-labels"><span>经验值</span><span id="expText">0 / 100</span></div>
+      <div class="evo-bar-wrap"><div class="evo-bar" id="evoBar" style="width:0%"></div></div>
+      <div class="evo-timeline">
+        <span class="stage reached">🥚</span><span class="evo-line" id="line1"></span>
+        <span class="stage" id="stg2">🐣</span><span class="evo-line" id="line2"></span>
+        <span class="stage" id="stg3">🦎</span><span class="evo-line" id="line3"></span>
+        <span class="stage" id="stg4">🐉</span><span class="evo-line" id="line4"></span>
+        <span class="stage" id="stg5">🐲</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="stats-row animate-fade-in">
+    <div class="stat-card card"><div class="stat-icon" id="moodIcon">😐</div><div class="stat-label">心情</div><div class="stat-value" id="moodLabel">一般</div></div>
+    <div class="stat-card card"><div class="stat-icon">🍖</div><div class="stat-label">饱腹度</div><div class="stat-value" id="hungerVal">50%</div></div>
+    <div class="stat-card card"><div class="stat-icon">⭐</div><div class="stat-label">总星星</div><div class="stat-value" id="totalStarsPet">42</div></div>
+  </div>
+
+  <div class="section animate-fade-in">
+    <h2 class="section-title">🎮 和 <span id="petNameInteract">小魔法</span> 互动</h2>
+    <div class="interact-grid">
+      <button class="interact-btn card" onclick="doAction('speak')"><span class="interact-icon">🎤</span><span class="interact-label">英语对话</span><span class="interact-desc">练习口语</span></button>
+      <button class="interact-btn card" onclick="doAction('play')"><span class="interact-icon">🎾</span><span class="interact-label">单词游戏</span><span class="interact-desc">边玩边学</span></button>
+      <button class="interact-btn card" onclick="doAction('feed')"><span class="interact-icon">🍎</span><span class="interact-label">喂食学习</span><span class="interact-desc">+经验值</span></button>
+      <button class="interact-btn card" onclick="doAction('story')"><span class="interact-icon">📖</span><span class="interact-label">英语故事</span><span class="interact-desc">磨耳朵</span></button>
+    </div>
+  </div>
+
+  <div class="section animate-fade-in">
+    <h2 class="section-title">🎨 宠物装扮</h2>
+    <div class="skin-list">
+      <div class="skin-item owned active"><div class="skin-preview">🥚</div><div class="skin-name">原皮</div><div class="skin-status">使用中</div></div>
+      <div class="skin-item"><div class="skin-preview">🔥</div><div class="skin-name">火焰</div><div class="skin-status">🔒</div></div>
+      <div class="skin-item"><div class="skin-preview">❄️</div><div class="skin-name">冰霜</div><div class="skin-status">🔒</div></div>
+      <div class="skin-item"><div class="skin-preview">🌟</div><div class="skin-name">星空</div><div class="skin-status">🔒</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 反馈页 ====== -->
+<div class="page" id="page-feedback">
+  <div class="page-header animate-fade-in"><h1>📊 学习反馈</h1><p>每一步成长都值得被看见</p></div>
+
+  <div class="overview-card card animate-fade-in">
+    <h3 class="overview-title">本周学习概览</h3>
+    <div class="overview-grid">
+      <div class="overview-item"><div class="overview-value" id="wkMin">130</div><div class="overview-label">学习时长(分钟)</div></div>
+      <div class="overview-item"><div class="overview-value" id="wkWords">40</div><div class="overview-label">学习单词</div></div>
+      <div class="overview-item"><div class="overview-value" id="wkSent">26</div><div class="overview-label">口语练习</div></div>
+      <div class="overview-item"><div class="overview-value">⭐<span id="wkStars">62</span></div><div class="overview-label">获得星星</div></div>
+    </div>
+  </div>
+
+  <div class="calendar-card card animate-fade-in">
+    <h3 class="section-title">📅 学习日历</h3>
+    <div class="heatmap" id="heatmap"></div>
+    <div class="heatmap-legend">
+      <span>少</span><span class="legend-cell lv0"></span><span class="legend-cell lv1"></span><span class="legend-cell lv2"></span><span class="legend-cell lv3"></span><span class="legend-cell lv4"></span><span>多</span>
+    </div>
+  </div>
+
+  <div class="section animate-fade-in">
+    <h3 class="section-title">🔍 需要加强的单词</h3>
+    <div class="weak-words" id="weakWordsList"></div>
+  </div>
+
+  <div class="suggestion-card card animate-fade-in">
+    <h3 class="section-title">💡 <span id="petNameSug">小魔法</span> 的建议</h3>
+    <div class="suggestion-content">
+      <div class="suggestion-avatar" id="petAvatarSug">🥚</div>
+      <div class="suggestion-text"><p id="suggestionText"></p></div>
+    </div>
+  </div>
+</div>
+
+<!-- 底部导航 -->
+<nav class="bottom-nav">
+  <button class="nav-item active" onclick="switchPage('home')"><span class="nav-icon">🏠</span><span>首页</span></button>
+  <button class="nav-item" onclick="switchPage('pet')"><span class="nav-icon">🐾</span><span>宠物</span></button>
+  <button class="nav-item" onclick="switchPage('feedback')"><span class="nav-icon">📊</span><span>反馈</span></button>
+</nav>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ====== 数据 ======
+const pet = { name:'小魔法', level:1, stage:'egg', exp:0, expToNext:100, mood:'normal', hunger:50, skin:'default' };
+const learning = { grade:3, unit:1, streak:5, todayMin:15, totalStars:42, weakWords:['beautiful','because','favorite'] };
+const tasks = [
+  { id:'1', title:'每日跟读', desc:'跟读一句英语魔法咒语', type:'speak', done:false, stars:0 },
+  { id:'2', title:'听力挑战', desc:'听音选词，练练耳朵', type:'listen', done:false, stars:0 },
+  { id:'3', title:'单词闯关', desc:'学习 5 个新单词', type:'word', done:false, stars:0 },
+  { id:'4', title:'情景对话', desc:'和宠物用英语聊聊天', type:'dialogue', done:false, stars:0 }
+];
+const history = [
+  { date:'2026-07-14', min:25, words:8, sent:5, stars:12 },
+  { date:'2026-07-13', min:20, words:6, sent:4, stars:10 },
+  { date:'2026-07-12', min:15, words:5, sent:3, stars:8 },
+  { date:'2026-07-11', min:30, words:10, sent:7, stars:15 },
+  { date:'2026-07-10', min:18, words:4, sent:2, stars:6 },
+  { date:'2026-07-09', min:22, words:7, sent:5, stars:11 },
+  { date:'2026-07-08', min:0, words:0, sent:0, stars:0 }
+];
+
+const taskIcons = { speak:'🎤', listen:'🎧', word:'📝', dialogue:'💬' };
+const stageEmoji = { egg:'🥚', baby:'🐣', young:'🦎', adult:'🐉', legend:'🐲' };
+const stageNames = { egg:'魔法蛋', baby:'幼崽期', young:'成长期', adult:'成熟期', legend:'传说级' };
+const moodEmoji = { happy:'😊', normal:'😐', sad:'😢', excited:'🤩' };
+const moodNames = { happy:'开心', normal:'一般', sad:'饿了', excited:'兴奋' };
+
+// ====== Toast ======
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ====== 页面切换 ======
+function switchPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach((n,i) => {
+    n.classList.toggle('active', ['home','pet','feedback'][i] === name);
+  });
+  if (name === 'home') renderHome();
+  if (name === 'pet') renderPet();
+  if (name === 'feedback') renderFeedback();
+}
+
+// ====== 宠物逻辑 ======
+function feedPet(exp) {
+  pet.exp += exp;
+  pet.hunger = Math.min(100, pet.hunger + exp/2);
+  if (pet.exp >= pet.expToNext && pet.level < 10) {
+    pet.level++;
+    pet.exp -= pet.expToNext;
+    pet.expToNext = Math.floor(pet.expToNext * 1.5);
+    pet.mood = 'excited';
+    if (pet.level >= 10) pet.stage = 'legend';
+    else if (pet.level >= 8) pet.stage = 'adult';
+    else if (pet.level >= 5) pet.stage = 'young';
+    else if (pet.level >= 3) pet.stage = 'baby';
+    showToast('🎉 ' + pet.name + ' 进化了！');
+  }
+}
+
+function doAction(type) {
+  if (type === 'feed') { feedPet(20); pet.mood='happy'; showToast('🍎 喂食成功！+20 经验值'); }
+  else if (type === 'speak') { feedPet(15); pet.mood='excited'; showToast('🗣️ "' + pet.name + ' 想和你聊一聊！"（功能开发中）'); }
+  else if (type === 'play') { feedPet(10); pet.mood='happy'; showToast('🎮 单词大冒险开始！（功能开发中）'); }
+  else if (type === 'story') { feedPet(10); pet.mood='normal'; showToast('📖 今天的故事：《The Magic Forest》（功能开发中）'); }
+  renderPet();
+  renderHome();
+}
+
+// ====== 渲染首页 ======
+function renderHome() {
+  document.getElementById('petNameHome').textContent = pet.name;
+  document.getElementById('todayMin').textContent = learning.todayMin + ' 分钟';
+  document.getElementById('streak').textContent = learning.streak;
+  document.getElementById('totalStars').textContent = learning.totalStars;
+  document.getElementById('gradeLabel').textContent = learning.grade + '年级 · Unit ' + learning.unit;
+  const doneCount = tasks.filter(t => t.done).length;
+  document.getElementById('progressBar').style.width = Math.round(doneCount / tasks.length * 100) + '%';
+
+  // 任务列表
+  const tl = document.getElementById('taskList');
+  tl.innerHTML = tasks.map(t => `
+    <div class="task-item card ${t.done?'done':''}" onclick="completeTask('${t.id}')">
+      <div class="task-icon">${taskIcons[t.type]}</div>
+      <div class="task-content"><div class="task-title">${t.title}</div><div class="task-desc">${t.desc}</div></div>
+      <div class="task-status">${t.done ? '<span class="task-stars">⭐⭐⭐</span>' : '<span class="task-go">GO</span>'}</div>
+    </div>
+  `).join('');
+
+  // 年级标签
+  const gt = document.getElementById('gradeTabs');
+  gt.innerHTML = [1,2,3,4,5,6].map(g =>
+    `<button class="grade-tab ${learning.grade===g?'active':''}" onclick="selectGrade(${g})">${g}年级</button>`
+  ).join('');
+
+  // 单元网格
+  const ug = document.getElementById('unitGrid');
+  ug.innerHTML = [1,2,3,4,5,6].map(u => {
+    let cls = '', status = '🔒';
+    if (u < learning.unit) { cls = 'done'; status = '✅'; }
+    else if (u === learning.unit) { cls = 'current'; status = '📖'; }
+    return `<div class="unit-card ${cls}" onclick="selectUnit(${u})"><div class="unit-num">Unit ${u}</div><div class="unit-status">${status}</div></div>`;
+  }).join('');
+
+  // 宠物快捷
+  document.getElementById('petAvatarHome').textContent = stageEmoji[pet.stage];
+  document.getElementById('petNameQuick').textContent = pet.name;
+  const md = document.getElementById('moodDotHome');
+  md.className = 'mood-dot ' + pet.mood;
+  document.getElementById('moodTextHome').textContent = moodNames[pet.mood];
+}
+
+function selectGrade(g) { learning.grade = g; renderHome(); }
+function selectUnit(u) { learning.unit = u; renderHome(); }
+
+function completeTask(id) {
+  const t = tasks.find(x => x.id === id);
+  if (!t || t.done) return;
+  t.done = true; t.stars = 3;
+  learning.totalStars += 3;
+  learning.todayMin += 5;
+  feedPet(30);
+  renderHome();
+  renderPet();
+  showToast('✅ 任务完成！+3⭐');
+}
+
+// ====== 渲染宠物页 ======
+function renderPet() {
+  document.getElementById('petEmoji').textContent = stageEmoji[pet.stage];
+  document.getElementById('petLevel').textContent = pet.level;
+  document.getElementById('petNameBig').textContent = pet.name;
+  document.getElementById('petNameInteract').textContent = pet.name;
+  const sb = document.getElementById('petStageBadge');
+  sb.textContent = stageNames[pet.stage];
+  sb.className = 'pet-stage-badge ' + pet.stage;
+  document.getElementById('expText').textContent = pet.exp + ' / ' + pet.expToNext;
+  document.getElementById('evoBar').style.width = Math.round(pet.exp / pet.expToNext * 100) + '%';
+  document.getElementById('moodIcon').textContent = moodEmoji[pet.mood];
+  document.getElementById('moodLabel').textContent = moodNames[pet.mood];
+  document.getElementById('hungerVal').textContent = pet.hunger + '%';
+  document.getElementById('totalStarsPet').textContent = learning.totalStars;
+
+  // 进化线
+  const stages = [
+    { id:'stg2', lv:3, line:'line1' },
+    { id:'stg3', lv:5, line:'line2' },
+    { id:'stg4', lv:8, line:'line3' },
+    { id:'stg5', lv:10, line:'line4' }
+  ];
+  stages.forEach(s => {
+    document.getElementById(s.id).classList.toggle('reached', pet.level >= s.lv);
+    document.getElementById(s.line).classList.toggle('active', pet.level >= s.lv);
+  });
+}
+
+// ====== 渲染反馈页 ======
+function renderFeedback() {
+  let tMin=0, tWords=0, tSent=0, tStars=0;
+  history.forEach(r => { tMin+=r.min; tWords+=r.words; tSent+=r.sent; tStars+=r.stars; });
+  document.getElementById('wkMin').textContent = tMin;
+  document.getElementById('wkWords').textContent = tWords;
+  document.getElementById('wkSent').textContent = tSent;
+  document.getElementById('wkStars').textContent = tStars;
+
+  // 热力图
+  const hm = document.getElementById('heatmap');
+  const today = new Date();
+  let cells = '';
+  for (let i=29; i>=0; i--) {
+    const d = new Date(today); d.setDate(d.getDate()-i);
+    const ds = d.toISOString().split('T')[0];
+    const rec = history.find(r => r.date === ds);
+    let lv = 0;
+    if (rec) { if (rec.min>=25) lv=4; else if (rec.min>=20) lv=3; else if (rec.min>=10) lv=2; else if (rec.min>0) lv=1; }
+    cells += `<div class="heatmap-cell lv${lv}" title="${ds}: ${rec?rec.min+'分钟':'未学习'}"><span class="heatmap-day">${d.getMonth()+1}/${d.getDate()}</span></div>`;
+  }
+  hm.innerHTML = cells;
+
+  // 薄弱单词
+  const wl = document.getElementById('weakWordsList');
+  wl.innerHTML = learning.weakWords.map(w =>
+    `<div class="weak-word card"><div class="word-text">${w}</div><button class="practice-btn" onclick="showToast('🔊 正在播放 &quot;${w}&quot; 的标准发音（功能开发中）')">练习发音</button></div>`
+  ).join('');
+
+  // 建议
+  document.getElementById('petNameSug').textContent = pet.name;
+  document.getElementById('petAvatarSug').textContent = stageEmoji[pet.stage];
+  let sug = '';
+  if (tMin < 30) sug = `嘿！这周只学了 ${tMin} 分钟哦，${pet.name} 有点饿了～每天坚持 10 分钟，我们就能一起进化啦！`;
+  else if (tMin < 100) sug = `不错不错！${tMin} 分钟的学习让我很开心！继续保持，多练练 "${learning.weakWords[0] || '新单词'}" 这个单词吧～`;
+  else sug = `哇！${tMin} 分钟！你太厉害了！${pet.name} 为你骄傲！继续保持，我们很快就能进化了！`;
+  document.getElementById('suggestionText').textContent = sug;
+}
+
+// ====== 初始化 ======
+renderHome();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "envId": "magic-english-main-d2cp777306bc7",
+  "version": "2.0",
+  "framework": {
+    "name": "magic-english-api",
+    "plugins": {
+      "server": {
+        "use": "@cloudbase/framework-plugin-container",
+        "inputs": {
+          "containerName": "magic-english-api",
+          "containerPort": 3000,
+          "dockerfile": "Dockerfile",
+          "servicePath": ".",
+          "uploadType": "package",
+          "envVariables": {
+            "NODE_ENV": "production",
+            "DATABASE_URL": "postgresql://magic_api_user:Tengfei0612$@sh-postgres-fk627k8w.sql.tencentcdb.com:24079/postgres",
+            "JWT_SECRET": "magic-english-jwt-secret-2026"
+          }
+        }
+      }
+    }
+  }
+}

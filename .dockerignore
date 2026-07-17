@@ -1,0 +1,16 @@
+node_modules
+dist
+.git
+.vscode
+.tutorial
+*.md
+docs
+e2e
+magic-english.test.ts
+vitest.e2e.config.ts
+vitest.config.ts
+Dockerfile
+docker-compose.yml
+.env
+.env.example
+*.log

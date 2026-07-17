@@ -1,0 +1,1410 @@
+<template>
+  <div class="learn-page">
+    <!-- 顶部导航栏 -->
+    <div class="learn-header">
+      <button class="back-btn" @click="handleBack">
+        <span>←</span>
+      </button>
+      <div class="progress-track">
+        <div class="progress-fill" :style="{ width: progressPct + '%' }"></div>
+      </div>
+      <span class="progress-text">{{ currentIndex + 1 }} / {{ words.length }}</span>
+    </div>
+
+    <!-- 模式: word — 单词学习 -->
+    <transition name="slide" mode="out-in">
+      <div v-if="mode === 'word'" key="word" class="word-mode">
+        <!-- 单词卡片 -->
+        <div class="word-card">
+          <div class="word-illustration" :style="{ background: wordBg }">
+            <span class="word-emoji">{{ wordEmoji }}</span>
+          </div>
+          <div class="word-display">
+            <h2 class="word-text">{{ currentWord?.word }}</h2>
+            <p class="word-phonetic">{{ currentWord?.phonetic || '/fəˈnetɪk/' }}</p>
+            <p class="word-meaning">{{ currentWord?.meaning || '单词释义' }}</p>
+          </div>
+
+          <!-- 例句 -->
+          <div class="example-box">
+            <p class="example-en">"{{ currentWord?.example || 'This is an example sentence.' }}"</p>
+            <p class="example-cn">{{ currentWord?.exampleCn || '这是一个例句。' }}</p>
+          </div>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="word-actions">
+          <button class="action-btn listen-btn" @click="playAudio"><span>🔊</span> 听发音</button>
+          <button class="action-btn speak-btn" @click="startSpeaking"><span>🎤</span> 跟读</button>
+          <button class="action-btn next-btn" @click="markKnown"><span>✅</span> 我认识了</button>
+        </div>
+      </div>
+
+      <!-- 模式: speak — 跟读反馈 -->
+      <div v-else-if="mode === 'speak'" key="speak" class="speak-mode">
+        <div class="speak-card">
+          <div class="speak-word">{{ currentWord?.word }}</div>
+
+          <!-- 录音状态 -->
+          <div class="recording-area" :class="{ recording: isRecording }">
+            <div class="mic-ring" :class="{ active: isRecording }">
+              <span class="mic-icon">🎤</span>
+            </div>
+            <p class="recording-hint">
+              {{ isRecording ? '正在聆听...' : '点击麦克风开始跟读' }}
+            </p>
+            <div v-if="isRecording" class="audio-wave">
+              <span
+                v-for="i in 5"
+                :key="i"
+                class="wave-bar"
+                :style="{ animationDelay: i * 0.1 + 's' }"
+              ></span>
+            </div>
+          </div>
+
+          <!-- 评分结果 -->
+          <transition name="fade">
+            <div v-if="score !== null" class="score-result">
+              <div class="score-ring" :class="scoreLevel">
+                <svg viewBox="0 0 120 120">
+                  <circle cx="60" cy="60" r="52" class="score-bg" />
+                  <circle
+                    cx="60"
+                    cy="60"
+                    r="52"
+                    class="score-fill"
+                    :style="{ strokeDashoffset: scoreOffset }"
+                  />
+                </svg>
+                <div class="score-value">{{ score }}</div>
+              </div>
+              <div class="score-label">{{ scoreLabel }}</div>
+              <div class="score-detail">
+                <div class="detail-item">
+                  <span class="detail-label">准确度</span>
+                  <span class="detail-value">{{ accuracy }}%</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">流利度</span>
+                  <span class="detail-value">{{ fluency }}%</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">完整度</span>
+                  <span class="detail-value">{{ completeness }}%</span>
+                </div>
+              </div>
+              <div class="feedback-msg" :class="scoreLevel">
+                <span class="feedback-icon">{{ feedbackIcon }}</span>
+                {{ feedbackText }}
+              </div>
+            </div>
+          </transition>
+        </div>
+
+        <div class="speak-actions">
+          <button v-if="score === null" class="action-btn listen-btn" @click="playAudio">
+            <span>🔊</span> 听示范
+          </button>
+          <button v-if="score !== null" class="action-btn retry-btn" @click="retrySpeak">
+            <span>🔄</span> 再试一次
+          </button>
+          <button v-if="score !== null" class="action-btn next-btn" @click="afterSpeak">
+            <span>→</span> 下一个
+          </button>
+        </div>
+      </div>
+
+      <!-- 模式: review — 复习测验 -->
+      <div v-else-if="mode === 'review'" key="review" class="review-mode">
+        <div v-if="reviewQuestion" class="review-card">
+          <div class="quiz-type-badge">{{ quizTypeLabel }}</div>
+
+          <!-- 看词选义 -->
+          <template v-if="reviewQuestion.type === 'meaning'">
+            <h2 class="quiz-word">{{ reviewQuestion.prompt }}</h2>
+            <p class="quiz-hint">请选择正确的意思</p>
+            <div class="options-grid">
+              <button
+                v-for="(opt, idx) in reviewQuestion.options"
+                :key="idx"
+                class="option-btn"
+                :class="optionClass(idx)"
+                :disabled="reviewAnswered"
+                @click="selectOption(idx)"
+              >
+                {{ opt }}
+              </button>
+            </div>
+          </template>
+
+          <!-- 听音选词 -->
+          <template v-if="reviewQuestion.type === 'listening'">
+            <div class="listen-quiz">
+              <button
+                class="listen-btn-lg"
+                :class="{ playing: isPlayingAudio }"
+                @click="playQuizAudio"
+              >
+                <span>{{ isPlayingAudio ? '🔊' : '👂' }}</span>
+                {{ isPlayingAudio ? '播放中...' : '点击听发音' }}
+              </button>
+            </div>
+            <p class="quiz-hint">选出你听到的单词</p>
+            <div class="options-grid">
+              <button
+                v-for="(opt, idx) in reviewQuestion.options"
+                :key="idx"
+                class="option-btn"
+                :class="optionClass(idx)"
+                :disabled="reviewAnswered"
+                @click="selectOption(idx)"
+              >
+                {{ opt }}
+              </button>
+            </div>
+          </template>
+
+          <!-- 拼写 -->
+          <template v-if="reviewQuestion.type === 'spelling'">
+            <h2 class="quiz-word">{{ reviewQuestion.prompt }}</h2>
+            <p class="quiz-hint">请输入正确的拼写</p>
+            <div class="spell-input-wrap">
+              <input
+                ref="spellInput"
+                v-model="spellAnswer"
+                type="text"
+                class="spell-input"
+                :class="{ correct: spellResult === 'correct', wrong: spellResult === 'wrong' }"
+                placeholder="输入单词拼写..."
+                :disabled="reviewAnswered"
+                @keyup.enter="submitSpelling"
+              />
+            </div>
+            <button
+              v-if="!reviewAnswered"
+              class="btn btn-primary spell-submit"
+              :disabled="!spellAnswer.trim()"
+              @click="submitSpelling"
+            >
+              确认 ✓
+            </button>
+            <div v-if="spellResult" class="spell-feedback" :class="spellResult">
+              {{
+                spellResult === 'correct'
+                  ? '✅ 回答正确！'
+                  : `❌ 正确答案是: ${reviewQuestion.correctAnswer}`
+              }}
+            </div>
+          </template>
+        </div>
+
+        <div class="review-actions">
+          <button v-if="reviewAnswered" class="action-btn next-btn" @click="nextReview">
+            <span>→</span> {{ isLastReview ? '完成复习' : '下一题' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 模式: result — 学习结算 -->
+      <div v-else-if="mode === 'result'" key="result" class="result-mode">
+        <div class="result-header">
+          <div class="result-badge">🎉</div>
+          <h2 class="result-title">学习完成！</h2>
+          <p class="result-sub">你又进步了一点点 ✨</p>
+        </div>
+
+        <div class="result-stats">
+          <div class="stat-card">
+            <span class="stat-icon">📝</span>
+            <span class="stat-num">{{ words.length }}</span>
+            <span class="stat-label">学习单词</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-icon">🎤</span>
+            <span class="stat-num">{{ speakCount }}</span>
+            <span class="stat-label">跟读次数</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-icon">✅</span>
+            <span class="stat-num">{{ correctCount }}</span>
+            <span class="stat-label">正确率</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-icon">⭐</span>
+            <span class="stat-num">{{ starsEarned }}</span>
+            <span class="stat-label">获得星星</span>
+          </div>
+        </div>
+
+        <!-- 豆豆鼓励 -->
+        <div class="dodo-cheer">
+          <div class="cheer-avatar animate-bounce">🐣</div>
+          <div class="cheer-bubble">
+            <p>{{ cheerMessage }}</p>
+          </div>
+        </div>
+
+        <div class="result-actions">
+          <button class="btn btn-secondary" @click="goHome">返回首页</button>
+          <button class="btn btn-primary" @click="startNew">再学一组</button>
+        </div>
+      </div>
+    </transition>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
+import { petStore, feedPet } from '../stores/pet'
+import { triggerEmotionEvent } from '../stores/emotion'
+
+const router = useRouter()
+
+// 模式: word | speak | review | result
+const mode = ref<'word' | 'speak' | 'review' | 'result'>('word')
+
+interface LearnWord {
+  word: string
+  phonetic?: string
+  meaning: string
+  example?: string
+  exampleCn?: string
+  emoji?: string
+  bg?: string
+}
+
+const words = ref<LearnWord[]>([
+  {
+    word: 'apple',
+    phonetic: '/ˈæp.əl/',
+    meaning: '苹果',
+    example: 'I like to eat an apple every day.',
+    exampleCn: '我喜欢每天吃一个苹果。',
+    emoji: '🍎',
+    bg: '#ffe0e0',
+  },
+  {
+    word: 'beautiful',
+    phonetic: '/ˈbjuː.tɪ.fəl/',
+    meaning: '美丽的',
+    example: 'The flowers are very beautiful.',
+    exampleCn: '这些花非常美丽。',
+    emoji: '🌸',
+    bg: '#ffe0f0',
+  },
+  {
+    word: 'because',
+    phonetic: '/bɪˈkɒz/',
+    meaning: '因为',
+    example: 'I am happy because I passed the test.',
+    exampleCn: '我很开心因为我通过了考试。',
+    emoji: '💡',
+    bg: '#e0f0ff',
+  },
+  {
+    word: 'favorite',
+    phonetic: '/ˈfeɪ.vər.ɪt/',
+    meaning: '最喜欢的',
+    example: 'My favorite color is blue.',
+    exampleCn: '我最喜欢的颜色是蓝色。',
+    emoji: '💙',
+    bg: '#e0e8ff',
+  },
+  {
+    word: 'dragon',
+    phonetic: '/ˈdræɡ.ən/',
+    meaning: '龙',
+    example: 'The dragon flies in the sky.',
+    exampleCn: '龙在天空中飞翔。',
+    emoji: '🐉',
+    bg: '#e8ffe0',
+  },
+])
+
+const currentIndex = ref(0)
+const currentWord = computed(() => words.value[currentIndex.value] || null)
+const wordEmoji = computed(() => currentWord.value?.emoji || '📖')
+const wordBg = computed(() => currentWord.value?.bg || '#f0e6ff')
+const progressPct = computed(() => (currentIndex.value / words.value.length) * 100)
+
+// 跟读状态
+const isRecording = ref(false)
+const score = ref<number | null>(null)
+const accuracy = ref(0)
+const fluency = ref(0)
+const completeness = ref(0)
+
+const scoreLevel = computed(() => {
+  if (score.value === null) return ''
+  if (score.value >= 90) return 'excellent'
+  if (score.value >= 70) return 'good'
+  if (score.value >= 50) return 'fair'
+  return 'poor'
+})
+
+const scoreLabel = computed(() => {
+  if (score.value === null) return ''
+  if (score.value >= 90) return '太棒了！发音很标准'
+  if (score.value >= 70) return '不错哦，继续加油'
+  if (score.value >= 50) return '还需练习，再来一次'
+  return '多听多练，会更好的'
+})
+
+const scoreOffset = computed(() => {
+  if (score.value === null) return 327
+  return 327 - (327 * score.value) / 100
+})
+
+const feedbackIcon = computed(() => {
+  if (score.value === null) return '🤔'
+  if (score.value >= 90) return '🌟'
+  if (score.value >= 70) return '👍'
+  return '💪'
+})
+
+const feedbackText = computed(() => {
+  if (score.value === null) return ''
+  if (score.value >= 90) return `${petStore.name} 为你感到骄傲！发音非常标准！`
+  if (score.value >= 70) return '读得不错！再练习一下会更好哦～'
+  return '没关系，多听几遍，慢慢来！'
+})
+
+// 复习状态
+interface ReviewQuestion {
+  type: 'meaning' | 'listening' | 'spelling'
+  prompt: string
+  options?: string[]
+  correctAnswer: string
+}
+
+const reviewQuestions = ref<ReviewQuestion[]>([])
+const reviewIndex = ref(0)
+const reviewQuestion = computed(() => reviewQuestions.value[reviewIndex.value] || null)
+const reviewAnswered = ref(false)
+const selectedOption = ref<number | null>(null)
+const correctOption = ref<number>(-1)
+const spellAnswer = ref('')
+const spellResult = ref<'correct' | 'wrong' | ''>('')
+const spellInput = ref<HTMLInputElement | null>(null)
+const isPlayingAudio = ref(false)
+const correctCount = ref(0)
+const reviewCorrectCount = ref(0)
+const speakCount = ref(0)
+const starsEarned = ref(0)
+
+const quizTypeLabel = computed(() => {
+  if (!reviewQuestion.value) return ''
+  const map: Record<string, string> = {
+    meaning: '看词选义',
+    listening: '听音选词',
+    spelling: '拼写挑战',
+  }
+  return map[reviewQuestion.value.type] || ''
+})
+
+const isLastReview = computed(() => reviewIndex.value >= reviewQuestions.value.length - 1)
+
+function generateReviewQuestions(): ReviewQuestion[] {
+  return words.value.flatMap((w) => {
+    const otherWords = words.value.filter((x) => x.word !== w.word)
+    const distractors = otherWords.slice(0, 3).map((x) => x.meaning)
+    return [
+      {
+        type: 'meaning' as const,
+        prompt: w.word,
+        options: shuffle([w.meaning, ...distractors]),
+        correctAnswer: w.meaning,
+      },
+      {
+        type: 'listening' as const,
+        prompt: w.word,
+        options: shuffle([w.word, ...otherWords.slice(0, 3).map((x) => x.word)]),
+        correctAnswer: w.word,
+      },
+    ]
+  })
+}
+
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
+function playAudio() {
+  // Mock: 模拟发音播放
+  const msg = `🔊 播放 "${currentWord.value?.word}" 的标准发音`
+  showToast(msg)
+}
+
+function startSpeaking() {
+  mode.value = 'speak'
+  score.value = null
+  speakCount.value++
+  // 模拟录音
+  isRecording.value = true
+  setTimeout(() => {
+    isRecording.value = false
+    // 模拟评分
+    const s = Math.floor(Math.random() * 40) + 60
+    score.value = s
+    accuracy.value = Math.floor(s * (0.8 + Math.random() * 0.2))
+    fluency.value = Math.floor(s * (0.7 + Math.random() * 0.3))
+    completeness.value = Math.floor(s * (0.75 + Math.random() * 0.25))
+    // 情感事件
+    triggerEmotionEvent(s >= 80 ? 'perfect_score' : 'correct_answer', s / 100, {
+      word: currentWord.value?.word || '',
+    })
+  }, 2000)
+}
+
+function retrySpeak() {
+  score.value = null
+  isRecording.value = true
+  setTimeout(() => {
+    isRecording.value = false
+    const s = Math.floor(Math.random() * 20) + 70
+    score.value = s
+    accuracy.value = Math.floor(s * (0.85 + Math.random() * 0.15))
+    fluency.value = Math.floor(s * (0.8 + Math.random() * 0.2))
+    completeness.value = Math.floor(s * (0.8 + Math.random() * 0.2))
+  }, 1500)
+}
+
+function afterSpeak() {
+  score.value = null
+  if (currentIndex.value < words.value.length - 1) {
+    currentIndex.value++
+    mode.value = 'word'
+  } else {
+    startReview()
+  }
+}
+
+function markKnown() {
+  triggerEmotionEvent('correct_answer', 0.8, { word: currentWord.value?.word || '' })
+  feedPet(5)
+  if (currentIndex.value < words.value.length - 1) {
+    currentIndex.value++
+  } else {
+    startReview()
+  }
+}
+
+function startReview() {
+  reviewQuestions.value = generateReviewQuestions()
+  reviewIndex.value = 0
+  reviewAnswered.value = false
+  selectedOption.value = null
+  correctOption.value = -1
+  spellAnswer.value = ''
+  spellResult.value = ''
+  reviewCorrectCount.value = 0
+  mode.value = 'review'
+}
+
+function selectOption(idx: number) {
+  if (reviewAnswered.value) return
+  reviewAnswered.value = true
+  selectedOption.value = idx
+  if (reviewQuestion.value?.options) {
+    correctOption.value = reviewQuestion.value.options.indexOf(reviewQuestion.value.correctAnswer)
+  }
+  if (idx === correctOption.value) {
+    reviewCorrectCount.value++
+    feedPet(3)
+    triggerEmotionEvent('review_correct', 0.9, { word: reviewQuestion.value?.prompt || '' })
+  } else {
+    triggerEmotionEvent('review_forgot', 0.5, { word: reviewQuestion.value?.prompt || '' })
+  }
+}
+
+function optionClass(idx: number) {
+  if (!reviewAnswered.value) return ''
+  if (idx === correctOption.value) return 'correct'
+  if (idx === selectedOption.value && idx !== correctOption.value) return 'wrong'
+  return 'dimmed'
+}
+
+function submitSpelling() {
+  if (!spellAnswer.value.trim() || reviewAnswered.value) return
+  reviewAnswered.value = true
+  const isCorrect =
+    spellAnswer.value.trim().toLowerCase() === reviewQuestion.value?.correctAnswer.toLowerCase()
+  spellResult.value = isCorrect ? 'correct' : 'wrong'
+  if (isCorrect) {
+    reviewCorrectCount.value++
+    feedPet(5)
+    triggerEmotionEvent('review_correct', 1, { word: reviewQuestion.value?.prompt || '' })
+  } else {
+    triggerEmotionEvent('review_forgot', 0.3, { word: reviewQuestion.value?.prompt || '' })
+  }
+}
+
+function playQuizAudio() {
+  isPlayingAudio.value = true
+  setTimeout(() => {
+    isPlayingAudio.value = false
+  }, 1500)
+}
+
+function nextReview() {
+  if (reviewIndex.value < reviewQuestions.value.length - 1) {
+    reviewIndex.value++
+    reviewAnswered.value = false
+    selectedOption.value = null
+    correctOption.value = -1
+    spellAnswer.value = ''
+    spellResult.value = ''
+    nextTick(() => spellInput.value?.focus())
+  } else {
+    showResult()
+  }
+}
+
+function showResult() {
+  correctCount.value = reviewCorrectCount.value
+  starsEarned.value = Math.floor(correctCount.value / 2) + speakCount.value
+  mode.value = 'result'
+  feedPet(starsEarned.value * 5)
+}
+
+const cheerMessage = computed(() => {
+  const rate = words.value.length > 0 ? correctCount.value / (reviewQuestions.value.length || 1) : 0
+  if (rate >= 0.9) return `太厉害了！${petStore.name} 为你感到骄傲！全部答对了！🌟`
+  if (rate >= 0.7) return `非常棒！答对了很多呢！${petStore.name} 很开心！`
+  if (rate >= 0.5) return '不错哦！继续努力，下次会更好的！'
+  return '没关系，学习需要时间。再来一次吧！💪'
+})
+
+function handleBack() {
+  if (mode.value === 'result') {
+    router.push('/')
+    return
+  }
+  if (mode.value === 'review') {
+    mode.value = 'word'
+    return
+  }
+  if (mode.value === 'speak') {
+    mode.value = 'word'
+    return
+  }
+  router.push('/')
+}
+
+function goHome() {
+  router.push('/')
+}
+
+function startNew() {
+  currentIndex.value = 0
+  mode.value = 'word'
+  // 刷新单词
+  words.value = shuffle(words.value)
+}
+
+function showToast(msg: string) {
+  // 简单的 toast 提示
+  // eslint-disable-next-line no-console -- 临时 toast 提示
+  console.log(msg)
+}
+</script>
+
+<style scoped>
+.learn-page {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #f8f7ff 0%, #f0ecff 100%);
+  padding-bottom: 40px;
+}
+
+/* 顶部导航 */
+.learn-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: white;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.back-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: var(--bg);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  transition: all 0.2s;
+}
+
+.back-btn:hover {
+  background: var(--primary);
+  color: white;
+}
+
+.progress-track {
+  flex: 1;
+  height: 6px;
+  background: #eee;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--secondary));
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.progress-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-light);
+  min-width: 48px;
+  text-align: right;
+}
+
+/* ============ 单词学习模式 ============ */
+.word-mode {
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.word-card {
+  width: 100%;
+  max-width: 360px;
+  background: white;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(108, 92, 231, 0.1);
+}
+
+.word-illustration {
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.5s;
+}
+
+.word-emoji {
+  font-size: 72px;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+.word-display {
+  padding: 20px 24px 0;
+  text-align: center;
+}
+
+.word-text {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 4px;
+}
+
+.word-phonetic {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.word-meaning {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.example-box {
+  margin: 16px 24px 24px;
+  padding: 16px;
+  background: var(--bg);
+  border-radius: 12px;
+}
+
+.example-en {
+  font-size: 15px;
+  color: var(--text);
+  font-style: italic;
+  line-height: 1.6;
+}
+
+.example-cn {
+  font-size: 13px;
+  color: var(--text-light);
+  margin-top: 6px;
+}
+
+.word-actions {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 24px;
+  border-radius: 16px;
+  border: none;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.listen-btn {
+  background: #e8f4fd;
+  color: #2980b9;
+}
+
+.listen-btn:hover {
+  background: #d0e8f8;
+  transform: translateY(-1px);
+}
+
+.speak-btn {
+  background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+  color: white;
+  box-shadow: 0 4px 15px rgba(108, 92, 231, 0.3);
+}
+
+.speak-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(108, 92, 231, 0.4);
+}
+
+.next-btn {
+  background: linear-gradient(135deg, #00b894, #55efc4);
+  color: white;
+  box-shadow: 0 4px 15px rgba(0, 184, 148, 0.3);
+}
+
+.next-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 184, 148, 0.4);
+}
+
+/* ============ 跟读模式 ============ */
+.speak-mode {
+  padding: 32px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+}
+
+.speak-card {
+  width: 100%;
+  max-width: 360px;
+  background: white;
+  border-radius: 20px;
+  padding: 32px 24px;
+  box-shadow: 0 8px 30px rgba(108, 92, 231, 0.1);
+  text-align: center;
+}
+
+.speak-word {
+  font-size: 42px;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 32px;
+}
+
+.recording-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.mic-ring {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  border: 3px solid transparent;
+}
+
+.mic-ring:hover {
+  border-color: var(--primary);
+}
+
+.mic-ring.active {
+  border-color: var(--danger);
+  background: #ffeaea;
+  animation: micPulse 1s ease-in-out infinite;
+}
+
+@keyframes micPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(225, 112, 85, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 20px rgba(225, 112, 85, 0);
+  }
+}
+
+.mic-icon {
+  font-size: 40px;
+}
+
+.recording-hint {
+  font-size: 15px;
+  color: var(--text-light);
+}
+
+.audio-wave {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 40px;
+}
+
+.wave-bar {
+  width: 4px;
+  background: var(--primary);
+  border-radius: 2px;
+  animation: waveAnim 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes waveAnim {
+  from {
+    height: 8px;
+  }
+  to {
+    height: 36px;
+  }
+}
+
+/* 评分结果 */
+.score-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.score-ring {
+  position: relative;
+  width: 120px;
+  height: 120px;
+}
+
+.score-ring svg {
+  transform: rotate(-90deg);
+}
+
+.score-bg {
+  fill: none;
+  stroke: #eee;
+  stroke-width: 8;
+}
+
+.score-fill {
+  fill: none;
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 327;
+  transition: stroke-dashoffset 1s ease;
+}
+
+.excellent .score-fill {
+  stroke: #00b894;
+}
+.good .score-fill {
+  stroke: #6c5ce7;
+}
+.fair .score-fill {
+  stroke: #f39c12;
+}
+.poor .score-fill {
+  stroke: #e17055;
+}
+
+.score-value {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.excellent .score-value {
+  color: #00b894;
+}
+.good .score-value {
+  color: #6c5ce7;
+}
+.fair .score-value {
+  color: #f39c12;
+}
+.poor .score-value {
+  color: #e17055;
+}
+
+.score-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.score-detail {
+  display: flex;
+  gap: 20px;
+  margin-top: 8px;
+}
+
+.detail-item {
+  text-align: center;
+}
+
+.detail-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: block;
+}
+
+.detail-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.feedback-msg {
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.feedback-msg.excellent {
+  background: #e6fff8;
+  color: #00896c;
+}
+.feedback-msg.good {
+  background: #f0ecff;
+  color: #4a3db3;
+}
+.feedback-msg.fair {
+  background: #fff8e6;
+  color: #b8860b;
+}
+.feedback-msg.poor {
+  background: #ffeaea;
+  color: #c0392b;
+}
+
+.feedback-icon {
+  font-size: 20px;
+}
+
+.speak-actions {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  max-width: 360px;
+}
+
+.retry-btn {
+  flex: 1;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.retry-btn:hover {
+  background: #e8e4f8;
+}
+
+/* ============ 复习模式 ============ */
+.review-mode {
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.review-card {
+  width: 100%;
+  max-width: 360px;
+  background: white;
+  border-radius: 20px;
+  padding: 28px 20px;
+  box-shadow: 0 8px 30px rgba(108, 92, 231, 0.1);
+  text-align: center;
+}
+
+.quiz-type-badge {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 20px;
+  background: var(--bg);
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.quiz-word {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.quiz-hint {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+.options-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.option-btn {
+  padding: 16px 12px;
+  border-radius: 12px;
+  border: 2px solid var(--border);
+  background: white;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.option-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: rgba(108, 92, 231, 0.05);
+}
+
+.option-btn.correct {
+  border-color: #00b894;
+  background: #e6fff8;
+  color: #00896c;
+  font-weight: 700;
+}
+
+.option-btn.wrong {
+  border-color: #e17055;
+  background: #ffeaea;
+  color: #c0392b;
+}
+
+.option-btn.dimmed {
+  opacity: 0.4;
+}
+
+.listen-quiz {
+  margin-bottom: 20px;
+}
+
+.listen-btn-lg {
+  padding: 16px 32px;
+  border-radius: 50px;
+  border: 2px solid var(--primary);
+  background: white;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--primary);
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 auto;
+}
+
+.listen-btn-lg:hover {
+  background: var(--primary);
+  color: white;
+}
+
+.listen-btn-lg.playing {
+  background: var(--primary);
+  color: white;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+/* 拼写 */
+.spell-input-wrap {
+  margin-bottom: 16px;
+}
+
+.spell-input {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 2px solid var(--border);
+  font-size: 18px;
+  text-align: center;
+  outline: none;
+  transition: all 0.3s;
+  letter-spacing: 2px;
+}
+
+.spell-input:focus {
+  border-color: var(--primary);
+}
+
+.spell-input.correct {
+  border-color: #00b894;
+  background: #e6fff8;
+}
+
+.spell-input.wrong {
+  border-color: #e17055;
+  background: #ffeaea;
+}
+
+.spell-submit {
+  width: 100%;
+}
+
+.spell-feedback {
+  margin-top: 12px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.spell-feedback.correct {
+  color: #00b894;
+}
+.spell-feedback.wrong {
+  color: #e17055;
+}
+
+.review-actions {
+  width: 100%;
+  max-width: 360px;
+}
+
+/* ============ 结算模式 ============ */
+.result-mode {
+  padding: 40px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+}
+
+.result-header {
+  text-align: center;
+}
+
+.result-badge {
+  font-size: 56px;
+  margin-bottom: 8px;
+  animation: bounce 1s ease-in-out infinite;
+}
+
+@keyframes bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.result-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.result-sub {
+  font-size: 15px;
+  color: var(--text-light);
+  margin-top: 4px;
+}
+
+.result-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  width: 100%;
+  max-width: 360px;
+}
+
+.stat-card {
+  background: white;
+  border-radius: 16px;
+  padding: 16px 8px;
+  text-align: center;
+  box-shadow: 0 4px 15px rgba(108, 92, 231, 0.08);
+}
+
+.stat-icon {
+  font-size: 24px;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.stat-num {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--primary);
+  display: block;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.dodo-cheer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: linear-gradient(135deg, #fff9e6, #ffe0f0);
+  border-radius: 16px;
+  padding: 20px;
+  width: 100%;
+  max-width: 360px;
+}
+
+.cheer-avatar {
+  font-size: 48px;
+  flex-shrink: 0;
+}
+
+.animate-bounce {
+  animation: bounce 1.5s ease-in-out infinite;
+}
+
+.cheer-bubble {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.result-actions {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  max-width: 360px;
+}
+
+.result-actions .btn {
+  flex: 1;
+}
+
+.btn-primary {
+  padding: 14px 24px;
+  border-radius: 14px;
+  border: none;
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  color: white;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(108, 92, 231, 0.3);
+}
+
+.btn-secondary {
+  padding: 14px 24px;
+  border-radius: 14px;
+  border: 2px solid var(--border);
+  background: white;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-secondary:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* 过渡动画 */
+.slide-enter-active,
+.slide-leave-active {
+  transition: all 0.35s ease;
+}
+
+.slide-enter-from {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.slide-leave-to {
+  opacity: 0;
+  transform: translateY(-20px);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

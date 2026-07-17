@@ -1,0 +1,42 @@
+# Magic English 依赖
+
+node_modules/
+dist/
+.env
+.env.local
+.env.production
+*.log
+.DS_Store
+
+# IDE
+.idea/
+*.swp
+*.swo
+.vscode/settings.json
+
+# 数据库
+*.db
+*.sqlite
+server/*.db
+server/*.sqlite
+
+# 构建产物
+server/dist/
+
+# 部署
+.cloudbase/
+.tcb/
+
+# 备份
+*.sql
+backup_*.sql
+!docs/*.sql
+
+# 测试
+coverage/
+.vitest/
+
+# 敏感信息
+*.pem
+*.key
+*.crt
