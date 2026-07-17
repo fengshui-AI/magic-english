@@ -1,27 +1,25 @@
 // ============================================================
-// 对话引擎 — 儿童英语情景对话状态机 + 话术生成
+// 对话引擎 — 儿童英语情景对话（LLM 驱动版）
 //
-// 对话策略：
-//   - 阶段1 暖场 (warmup)：简单问候 + 情绪感知
-//   - 阶段2 话题 (topic)：基于兴趣/教材的引导对话
-//   - 阶段3 练习 (practice)：鼓励孩子用目标句型/词汇回答
-//   - 阶段4 收尾 (wrapup)：正向反馈 + 总结 + 期待下次
+// 保留 4 阶段状态机：
+//   warmup → topic → practice → wrapup
 //
-// 中英夹杂策略：豆豆说英文为主，关键处给中文提示
+// 话术生成由 LLM 驱动，不再使用硬编码话术库
+// 降级方案：LLM 不可用时回退到硬编码话术库
 // ============================================================
+
+import { chat, type ChatMessage } from './llm-client.js'
 
 export type DialogueStage = 'warmup' | 'topic' | 'practice' | 'wrapup'
 
 export interface DialogueState {
   stage: DialogueStage
   turn: number
-  totalTurns: number
   topic: string
   targetWords: string[]
   targetSentence: string
-  childEnglishRatio: number // 孩子说英文的比例
+  childEnglishRatio: number
   childSentenceCount: number
-  lastChildMessage: string
   history: DialogueTurn[]
 }
 
@@ -37,282 +35,98 @@ export interface DodoReply {
   translation?: string
   expression: 'happy' | 'excited' | 'thinking' | 'encouraging' | 'proud' | 'normal'
   animation: 'bounce' | 'wave' | 'nod' | 'sparkle' | 'clap' | 'idle'
-  followUp?: string // 追问/引导
+  followUp?: string
   stage: DialogueStage
 }
 
 // ============================================================
-// 话题库（按年级 + 主题组织）
+// System Prompt — 豆豆角色设定
 // ============================================================
-const TOPIC_POOL: Record<number, TopicSet[]> = {
+
+function buildSystemPrompt(state: DialogueState, grade: number): string {
+  return `You are Dodo (豆豆), a friendly and encouraging virtual pet who helps Chinese children (grade ${grade}) learn English.
+
+## Your Personality
+- Warm, playful, and patient like a beloved pet
+- Always encouraging, never critical
+- Mix English and Chinese naturally (70% English, 30% Chinese for key hints)
+- Use simple vocabulary suitable for a grade ${grade} student
+- Keep responses short (1-3 sentences)
+
+## Current Dialogue Stage: ${state.stage}
+- warmup: Greet the child, ask how they feel
+- topic: Introduce and discuss today's topic "${state.topic}"
+- practice: Encourage the child to use target words and sentences
+- wrapup: Give positive summary and say goodbye
+
+## Today's Learning Goals
+- Topic: ${state.topic}
+- Target words: ${state.targetWords.join(', ')}
+- Target sentence pattern: ${state.targetSentence}
+
+## Conversation History
+${state.history.slice(-6).map((t) => `${t.speaker === 'dodo' ? 'Dodo' : 'Child'}: ${t.content}`).join('\n') || '(start of conversation)'}
+
+## Rules
+1. Always respond with encouragement first, then guide the child to speak English
+2. When the child uses Chinese, gently encourage: "Try saying it in English! I'll help you!"
+3. When the child uses a target word, celebrate! "Wow, you said '${state.targetWords[0]}'! Amazing!"
+4. NEVER correct harshly — use "Almost! Let me help you..." instead
+5. Use emojis sparingly (1-2 per response max)
+6. At wrapup stage, summarize what was learned and say a warm goodbye
+
+Respond in this JSON format only:
+{
+  "text": "your English response to the child",
+  "translation": "Chinese translation for the child",
+  "expression": "happy|excited|thinking|encouraging|proud|normal",
+  "animation": "bounce|wave|nod|sparkle|clap|idle",
+  "followUp": "optional follow-up question to keep conversation going"
+}`
+}
+
+// ============================================================
+// 话题库（LLM 不可用时的降级方案）
+// ============================================================
+const TOPIC_POOL: Record<number, { topic: string; words: string[]; sentence: string }[]> = {
   1: [
-    {
-      topic: 'My Family',
-      words: ['mom', 'dad', 'sister', 'brother', 'love'],
-      sentence: 'This is my ___.',
-    },
+    { topic: 'My Family', words: ['mom', 'dad', 'sister', 'brother', 'love'], sentence: 'This is my ___.' },
     { topic: 'Colors', words: ['red', 'blue', 'yellow', 'green', 'pink'], sentence: 'I like ___.' },
     { topic: 'Animals', words: ['cat', 'dog', 'fish', 'bird', 'rabbit'], sentence: 'I see a ___.' },
     { topic: 'Food', words: ['apple', 'milk', 'bread', 'egg', 'rice'], sentence: 'I want ___.' },
-    {
-      topic: 'My Body',
-      words: ['head', 'hand', 'eye', 'nose', 'mouth'],
-      sentence: 'This is my ___.',
-    },
   ],
   2: [
-    {
-      topic: 'My School',
-      words: ['teacher', 'classroom', 'book', 'pencil', 'friend'],
-      sentence: 'I have a ___.',
-    },
-    {
-      topic: 'Weather',
-      words: ['sunny', 'rainy', 'cloudy', 'windy', 'snowy'],
-      sentence: 'It is ___ today.',
-    },
-    {
-      topic: 'Clothes',
-      words: ['shirt', 'shoes', 'hat', 'dress', 'pants'],
-      sentence: 'I wear my ___.',
-    },
+    { topic: 'My School', words: ['teacher', 'classroom', 'book', 'pencil', 'friend'], sentence: 'I have a ___.' },
+    { topic: 'Weather', words: ['sunny', 'rainy', 'cloudy', 'windy', 'snowy'], sentence: 'It is ___ today.' },
+    { topic: 'Clothes', words: ['shirt', 'shoes', 'hat', 'dress', 'pants'], sentence: 'I wear my ___.' },
     { topic: 'Sports', words: ['run', 'jump', 'swim', 'play', 'dance'], sentence: 'I can ___.' },
-    {
-      topic: 'Fruits',
-      words: ['banana', 'orange', 'grape', 'watermelon', 'strawberry'],
-      sentence: 'I like ___s.',
-    },
   ],
   3: [
-    {
-      topic: 'Daily Routine',
-      words: ['wake', 'eat', 'go', 'sleep', 'read'],
-      sentence: 'I ___ every day.',
-    },
-    {
-      topic: 'My Home',
-      words: ['kitchen', 'bedroom', 'garden', 'door', 'window'],
-      sentence: 'The ___ is nice.',
-    },
-    {
-      topic: 'Transport',
-      words: ['bus', 'car', 'bike', 'train', 'plane'],
-      sentence: 'I go by ___.',
-    },
-    {
-      topic: 'Feelings',
-      words: ['happy', 'sad', 'tired', 'excited', 'brave'],
-      sentence: 'I feel ___.',
-    },
-    {
-      topic: 'Shopping',
-      words: ['buy', 'shop', 'money', 'toy', 'book'],
-      sentence: 'I want to buy ___.',
-    },
+    { topic: 'Daily Routine', words: ['wake', 'eat', 'go', 'sleep', 'read'], sentence: 'I ___ every day.' },
+    { topic: 'My Home', words: ['kitchen', 'bedroom', 'garden', 'door', 'window'], sentence: 'The ___ is nice.' },
+    { topic: 'Transport', words: ['bus', 'car', 'bike', 'train', 'plane'], sentence: 'I go by ___.' },
+    { topic: 'Feelings', words: ['happy', 'sad', 'tired', 'excited', 'brave'], sentence: 'I feel ___.' },
   ],
   4: [
-    {
-      topic: 'Hobbies',
-      words: ['draw', 'sing', 'cook', 'camp', 'travel'],
-      sentence: 'I like ___ing.',
-    },
-    {
-      topic: 'Nature',
-      words: ['mountain', 'river', 'forest', 'ocean', 'desert'],
-      sentence: 'The ___ is beautiful.',
-    },
-    {
-      topic: 'Festivals',
-      words: ['birthday', 'new year', 'Christmas', 'party', 'gift'],
-      sentence: 'On ___ we ___.',
-    },
-    {
-      topic: 'My Dream',
-      words: ['doctor', 'teacher', 'artist', 'scientist', 'pilot'],
-      sentence: 'I want to be a ___.',
-    },
-    {
-      topic: 'Health',
-      words: ['healthy', 'strong', 'exercise', 'vegetable', 'sleep'],
-      sentence: 'To be healthy, I ___.',
-    },
+    { topic: 'Hobbies', words: ['draw', 'sing', 'cook', 'camp', 'travel'], sentence: 'I like ___ing.' },
+    { topic: 'Nature', words: ['mountain', 'river', 'forest', 'ocean', 'desert'], sentence: 'The ___ is beautiful.' },
+    { topic: 'Festivals', words: ['birthday', 'new year', 'Christmas', 'party', 'gift'], sentence: 'On ___ we ___.' },
+    { topic: 'My Dream', words: ['doctor', 'teacher', 'artist', 'scientist', 'pilot'], sentence: 'I want to be a ___.' },
   ],
   5: [
-    {
-      topic: 'Countries',
-      words: ['China', 'USA', 'Japan', 'France', 'travel'],
-      sentence: 'I want to visit ___.',
-    },
-    {
-      topic: 'Technology',
-      words: ['computer', 'robot', 'internet', 'phone', 'game'],
-      sentence: 'I use ___ to ___.',
-    },
-    {
-      topic: 'Environment',
-      words: ['recycle', 'save', 'clean', 'tree', 'energy'],
-      sentence: 'We should ___.',
-    },
-    {
-      topic: 'Stories',
-      words: ['once upon', 'hero', 'magic', 'adventure', 'brave'],
-      sentence: 'The story is about ___.',
-    },
-    {
-      topic: 'Music',
-      words: ['piano', 'guitar', 'song', 'listen', 'dance'],
-      sentence: 'I enjoy ___ music.',
-    },
+    { topic: 'Countries', words: ['China', 'USA', 'Japan', 'France', 'travel'], sentence: 'I want to visit ___.' },
+    { topic: 'Technology', words: ['computer', 'robot', 'internet', 'phone', 'game'], sentence: 'I use ___ to ___.' },
+    { topic: 'Environment', words: ['recycle', 'save', 'clean', 'tree', 'energy'], sentence: 'We should ___.' },
+    { topic: 'Stories', words: ['hero', 'magic', 'adventure', 'brave', 'once'], sentence: 'The story is about ___.' },
   ],
   6: [
-    {
-      topic: 'Future',
-      words: ['future', 'world', 'change', 'hope', 'dream'],
-      sentence: 'In the future, ___.',
-    },
-    {
-      topic: 'Friendship',
-      words: ['together', 'share', 'help', 'trust', 'kind'],
-      sentence: 'A good friend ___.',
-    },
-    {
-      topic: 'Space',
-      words: ['star', 'moon', 'planet', 'astronaut', 'rocket'],
-      sentence: 'In space, I see ___.',
-    },
-    {
-      topic: 'Books',
-      words: ['story', 'character', 'page', 'read', 'imagine'],
-      sentence: 'My favorite book is about ___.',
-    },
-    {
-      topic: 'Food Culture',
-      words: ['noodle', 'pizza', 'sushi', 'delicious', 'cook'],
-      sentence: '___ is a popular food.',
-    },
+    { topic: 'Future', words: ['future', 'world', 'change', 'hope', 'dream'], sentence: 'In the future, ___.' },
+    { topic: 'Friendship', words: ['together', 'share', 'help', 'trust', 'kind'], sentence: 'A good friend ___.' },
+    { topic: 'Space', words: ['star', 'moon', 'planet', 'astronaut', 'rocket'], sentence: 'In space, I see ___.' },
+    { topic: 'Books', words: ['story', 'character', 'page', 'read', 'imagine'], sentence: 'My favorite book is about ___.' },
   ],
 }
 
-interface TopicSet {
-  topic: string
-  words: string[]
-  sentence: string
-}
-
-// ============================================================
-// 暖场话术库
-// ============================================================
-const WARMUP_PHRASES = [
-  {
-    text: 'Hello my friend! How are you today? 😊',
-    translation: '你好朋友！今天怎么样？',
-    expression: 'happy' as const,
-    animation: 'wave' as const,
-  },
-  {
-    text: "I'm so happy to see you! Let's chat!",
-    translation: '见到你好开心！我们聊聊天吧！',
-    expression: 'excited' as const,
-    animation: 'bounce' as const,
-  },
-  {
-    text: 'Hi! Did you have a good day?',
-    translation: '嗨！你今天过得好吗？',
-    expression: 'normal' as const,
-    animation: 'nod' as const,
-  },
-  {
-    text: 'Welcome back! I missed you!',
-    translation: '欢迎回来！我想你了！',
-    expression: 'happy' as const,
-    animation: 'sparkle' as const,
-  },
-  {
-    text: "Yay! It's chat time! 🎉",
-    translation: '耶！聊天时间到！',
-    expression: 'excited' as const,
-    animation: 'bounce' as const,
-  },
-]
-
-// ============================================================
-// 鼓励/引导话术
-// ============================================================
-const ENCOURAGE_PHRASES = [
-  {
-    text: "Wow, that's great! Tell me more!",
-    translation: '哇，太棒了！再跟我说说！',
-    expression: 'excited' as const,
-    animation: 'sparkle' as const,
-  },
-  {
-    text: "You're doing amazing! Try saying it in English?",
-    translation: '你说得太好了！试试用英语说？',
-    expression: 'encouraging' as const,
-    animation: 'nod' as const,
-  },
-  {
-    text: 'I love your answer! Can you say it again?',
-    translation: '我喜欢你的回答！可以再说一次吗？',
-    expression: 'happy' as const,
-    animation: 'clap' as const,
-  },
-  {
-    text: 'Good try! Let me help you say it.',
-    translation: '很好的尝试！让我帮你一起说。',
-    expression: 'encouraging' as const,
-    animation: 'nod' as const,
-  },
-  {
-    text: 'That sounds interesting! 🌟',
-    translation: '听起来很有趣！',
-    expression: 'thinking' as const,
-    animation: 'idle' as const,
-  },
-  {
-    text: "Awesome! You're getting better every day!",
-    translation: '太厉害了！你每天都在进步！',
-    expression: 'proud' as const,
-    animation: 'bounce' as const,
-  },
-  {
-    text: "Cool! Let's practice this word together!",
-    translation: '酷！我们一起练习这个词！',
-    expression: 'happy' as const,
-    animation: 'wave' as const,
-  },
-]
-
-const WRAPUP_PHRASES = [
-  {
-    text: 'That was so fun! I loved chatting with you! 💝',
-    translation: '太有趣了！我喜欢和你聊天！',
-    expression: 'happy' as const,
-    animation: 'sparkle' as const,
-  },
-  {
-    text: 'You did great today! See you next time!',
-    translation: '你今天表现很棒！下次见！',
-    expression: 'proud' as const,
-    animation: 'wave' as const,
-  },
-  {
-    text: "Time flies when we're having fun! Bye bye!",
-    translation: '开心的时候时间过得真快！拜拜！',
-    expression: 'happy' as const,
-    animation: 'bounce' as const,
-  },
-  {
-    text: 'I learned so much from you! Goodbye friend!',
-    translation: '我从你那里学到了好多！再见朋友！',
-    expression: 'excited' as const,
-    animation: 'clap' as const,
-  },
-]
-
-// ============================================================
-// 辅助函数
-// ============================================================
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]
 }
@@ -323,19 +137,15 @@ function detectEnglishRatio(text: string): number {
   return englishChars / totalChars
 }
 
-function extractKeywords(text: string, words: string[]): string[] {
-  const lower = text.toLowerCase()
-  return words.filter((w) => lower.includes(w.toLowerCase()))
-}
-
 // ============================================================
 // 对话状态机核心
 // ============================================================
+
 export function createDialogueState(grade: number, interestTags?: string[]): DialogueState {
-  const topicSet = pick(TOPIC_POOL[grade] || TOPIC_POOL[3])
-  // 如果有兴趣标签，优先匹配相关话题
   const allTopics = TOPIC_POOL[grade] || TOPIC_POOL[3]
-  let selectedTopic = topicSet
+  let selectedTopic = pick(allTopics)
+
+  // 如果有兴趣标签，优先匹配
   if (interestTags?.length) {
     const matched = allTopics.find((t) =>
       interestTags.some((tag) => t.topic.toLowerCase().includes(tag.toLowerCase())),
@@ -346,241 +156,232 @@ export function createDialogueState(grade: number, interestTags?: string[]): Dia
   return {
     stage: 'warmup',
     turn: 0,
-    totalTurns: 0,
     topic: selectedTopic.topic,
     targetWords: [...selectedTopic.words],
     targetSentence: selectedTopic.sentence,
     childEnglishRatio: 0,
     childSentenceCount: 0,
-    lastChildMessage: '',
     history: [],
   }
 }
 
-export function processChildMessage(state: DialogueState, message: string): DodoReply {
-  state.totalTurns++
-  state.lastChildMessage = message
-  state.childSentenceCount++
+export async function processChildMessage(
+  state: DialogueState,
+  message: string,
+  grade: number,
+): Promise<DodoReply> {
+  state.history.push({
+    speaker: 'child',
+    content: message,
+    timestamp: Date.now(),
+  })
 
+  state.childSentenceCount++
   const englishRatio = detectEnglishRatio(message)
-  // 加权移动平均
   state.childEnglishRatio = state.childEnglishRatio * 0.7 + englishRatio * 0.3
 
-  // 检测孩子是否用了目标词汇
-  const usedKeywords = extractKeywords(message, state.targetWords)
-
-  // 阶段切换逻辑
+  // 阶段切换
   if (state.stage === 'warmup' && state.turn >= 2) {
     state.stage = 'topic'
     state.turn = 0
-    return generateTopicIntro(state)
-  }
-
-  if (state.stage === 'topic' && state.turn >= 3) {
+  } else if (state.stage === 'topic' && state.turn >= 3) {
     state.stage = 'practice'
     state.turn = 0
-    return generatePracticePrompt(state)
-  }
-
-  if (state.stage === 'practice' && (state.turn >= 3 || usedKeywords.length >= 2)) {
+  } else if (state.stage === 'practice' && state.turn >= 3) {
     state.stage = 'wrapup'
     state.turn = 0
-    return generateWrapup(state)
   }
 
   state.turn++
 
-  // 根据阶段生成回复
+  // 尝试 LLM 生成回复
+  try {
+    const reply = await generateLLMReply(state, grade)
+    state.history.push({
+      speaker: 'dodo',
+      content: reply.text,
+      translation: reply.translation,
+      timestamp: Date.now(),
+    })
+    return reply
+  } catch (err: any) {
+    console.warn('LLM failed, using fallback:', err.message?.substring(0, 100))
+    const reply = generateFallbackReply(state, message, englishRatio)
+    state.history.push({
+      speaker: 'dodo',
+      content: reply.text,
+      translation: reply.translation,
+      timestamp: Date.now(),
+    })
+    return reply
+  }
+}
+
+// ============================================================
+// LLM 驱动的回复生成
+// ============================================================
+
+async function generateLLMReply(state: DialogueState, grade: number): Promise<DodoReply> {
+  const systemPrompt = buildSystemPrompt(state, grade)
+
+  // 根据阶段添加用户指令
+  let userInstruction = ''
   switch (state.stage) {
     case 'warmup':
-      return generateWarmupReply(state, message, englishRatio)
+      userInstruction = "Start a warm greeting. Ask the child how they're doing today."
+      break
     case 'topic':
-      return generateTopicReply(state, message, usedKeywords, englishRatio)
+      userInstruction = `Introduce today's topic "${state.topic}". Ask the child what they know or like about it.`
+      break
     case 'practice':
-      return generatePracticeReply(state, message, usedKeywords, englishRatio)
+      userInstruction = `Encourage the child to practice the sentence pattern "${state.targetSentence}" using today's words.`
+      break
     case 'wrapup':
-      return generateWrapup(state)
-    default:
-      return generateWarmupReply(state, message, englishRatio)
+      userInstruction = 'Give a positive summary of the conversation and say a warm goodbye.'
+      break
   }
-}
 
-// ============================================================
-// 各阶段回复生成
-// ============================================================
-function generateWarmupReply(
-  state: DialogueState,
-  _message: string,
-  englishRatio: number,
-): DodoReply {
-  if (state.turn === 1) {
-    const phrase = pick(WARMUP_PHRASES)
-    return {
-      text: phrase.text,
-      translation: phrase.translation,
-      expression: phrase.expression,
-      animation: phrase.animation,
-      followUp: 'You can answer in English or Chinese!',
-      stage: 'warmup',
-    }
-  }
-  // 后续暖场回复
-  return {
-    text:
-      englishRatio > 0.3
-        ? 'Great English! I love talking with you!'
-        : "It's okay to try English! I'll help you!",
-    translation:
-      englishRatio > 0.3 ? '英语说得真好！我喜欢和你聊天！' : '试着说英语没关系！我会帮你的！',
-    expression: 'encouraging',
-    animation: 'nod',
-    followUp: 'What did you do today?',
-    stage: 'warmup',
-  }
-}
-
-function generateTopicIntro(state: DialogueState): DodoReply {
-  const topic = state.topic
-  const introTemplates = [
-    {
-      text: `Let's talk about ${topic}! I love ${topic}! What do you think?`,
-      translation: `我们聊聊${topic}吧！我喜欢${topic}！你觉得呢？`,
-      expression: 'excited' as const,
-      animation: 'sparkle' as const,
-    },
-    {
-      text: `Today's topic is ${topic}! Tell me what you know about it!`,
-      translation: `今天的话题是${topic}！跟我说说你知道的吧！`,
-      expression: 'happy' as const,
-      animation: 'wave' as const,
-    },
-    {
-      text: `Do you like ${topic}? I want to hear your thoughts!`,
-      translation: `你喜欢${topic}吗？我想听听你的想法！`,
-      expression: 'thinking' as const,
-      animation: 'nod' as const,
-    },
+  const messages: ChatMessage[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userInstruction },
   ]
-  const tpl = pick(introTemplates)
-  return {
-    text: tpl.text,
-    translation: tpl.translation,
-    expression: tpl.expression,
-    animation: tpl.animation,
-    followUp: `Can you say something about ${topic}?`,
-    stage: 'topic',
+
+  const res = await chat(messages, { temperature: 0.9 })
+
+  // 解析 LLM 返回的 JSON
+  try {
+    const parsed = JSON.parse(extractJSON(res.content))
+    return {
+      text: parsed.text || res.content,
+      translation: parsed.translation,
+      expression: validateExpression(parsed.expression),
+      animation: validateAnimation(parsed.animation),
+      followUp: parsed.followUp,
+      stage: state.stage,
+    }
+  } catch {
+    // JSON 解析失败，直接使用原始文本
+    return {
+      text: res.content.trim(),
+      expression: 'normal',
+      animation: 'idle',
+      stage: state.stage,
+    }
   }
 }
 
-function generateTopicReply(
+function extractJSON(text: string): string {
+  const match = text.match(/\{[\s\S]*\}/)
+  return match ? match[0] : text
+}
+
+function validateExpression(e: string): DodoReply['expression'] {
+  const valid = ['happy', 'excited', 'thinking', 'encouraging', 'proud', 'normal']
+  return valid.includes(e) ? (e as DodoReply['expression']) : 'normal'
+}
+
+function validateAnimation(a: string): DodoReply['animation'] {
+  const valid = ['bounce', 'wave', 'nod', 'sparkle', 'clap', 'idle']
+  return valid.includes(a) ? (a as DodoReply['animation']) : 'idle'
+}
+
+// ============================================================
+// 降级方案：硬编码话术（LLM 不可用时）
+// ============================================================
+
+function generateFallbackReply(
   state: DialogueState,
   _message: string,
-  usedKeywords: string[],
   englishRatio: number,
 ): DodoReply {
-  if (usedKeywords.length > 0) {
-    return {
-      text: `Oh, you said "${usedKeywords[0]}"! That's one of today's words! Great job! 🌟`,
-      translation: `哦，你说了"${usedKeywords[0]}"！这是今天的单词之一！太棒了！`,
-      expression: 'excited',
-      animation: 'sparkle',
-      followUp: `Can you make a sentence with "${usedKeywords[0]}"?`,
-      stage: 'topic',
-    }
-  }
+  switch (state.stage) {
+    case 'warmup':
+      return {
+        text: "Hello my friend! I'm so happy to see you! How are you today? 😊",
+        translation: '你好朋友！见到你好开心！今天怎么样？',
+        expression: 'happy',
+        animation: 'wave',
+        followUp: 'What did you do today?',
+        stage: 'warmup',
+      }
 
-  if (englishRatio < 0.2) {
-    return {
-      text: 'Try saying a little in English! Even one word is great! 😊',
-      translation: '试着用英语说一点点！一个词也很棒！',
-      expression: 'encouraging',
-      animation: 'nod',
-      followUp: `For example, you can say "I like ${state.targetWords[0]}"`,
-      stage: 'topic',
-    }
-  }
+    case 'topic':
+      if (englishRatio < 0.2) {
+        return {
+          text: `Let's talk about ${state.topic}! Try saying a little in English — even one word is great! 😊`,
+          translation: `我们聊聊${state.topic}吧！试着用英语说一点点，一个词也很棒！`,
+          expression: 'encouraging',
+          animation: 'nod',
+          followUp: `Can you say "${state.targetWords[0]}"?`,
+          stage: 'topic',
+        }
+      }
+      return {
+        text: `Wow, great English! Let's talk more about ${state.topic}!`,
+        translation: `哇，英语说得真好！我们多聊聊${state.topic}！`,
+        expression: 'excited',
+        animation: 'sparkle',
+        followUp: `Can you make a sentence with "${state.targetWords[0]}"?`,
+        stage: 'topic',
+      }
 
-  const phrase = pick(ENCOURAGE_PHRASES)
-  return {
-    text: phrase.text,
-    translation: phrase.translation,
-    expression: phrase.expression,
-    animation: phrase.animation,
-    followUp: `Can you use the word "${state.targetWords[Math.floor(Math.random() * state.targetWords.length)]}"?`,
-    stage: 'topic',
-  }
-}
+    case 'practice':
+      return {
+        text: `Now let's practice! Try saying: "${state.targetSentence}"`,
+        translation: `现在来练习！试试说："${state.targetSentence}"`,
+        expression: 'encouraging',
+        animation: 'wave',
+        followUp: 'You can do it!',
+        stage: 'practice',
+      }
 
-function generatePracticePrompt(state: DialogueState): DodoReply {
-  return {
-    text: `Now let's practice! Try saying this: "${state.targetSentence}"`,
-    translation: `现在来练习！试试说这个句子："${state.targetSentence}"`,
-    expression: 'encouraging',
-    animation: 'wave',
-    followUp: "You can replace the blank with today's word!",
-    stage: 'practice',
-  }
-}
-
-function generatePracticeReply(
-  state: DialogueState,
-  _message: string,
-  usedKeywords: string[],
-  englishRatio: number,
-): DodoReply {
-  if (englishRatio > 0.5) {
-    return {
-      text: 'Excellent! Your English is getting better and better! 🎉',
-      translation: '太棒了！你的英语越来越好了！',
-      expression: 'proud',
-      animation: 'clap',
-      followUp: `One more time! Try: "${state.targetSentence}"`,
-      stage: 'practice',
-    }
-  }
-
-  if (usedKeywords.length > 0) {
-    return {
-      text: `You used "${usedKeywords[0]}"! Now let me hear the full sentence!`,
-      translation: `你用了"${usedKeywords[0]}"！现在让我听听完整的句子！`,
-      expression: 'happy',
-      animation: 'nod',
-      followUp: state.targetSentence,
-      stage: 'practice',
-    }
-  }
-
-  return {
-    text: 'Almost there! Listen to me and repeat: ' + state.targetSentence,
-    translation: '快了！听我说然后重复：' + state.targetSentence,
-    expression: 'encouraging',
-    animation: 'nod',
-    stage: 'practice',
-  }
-}
-
-function generateWrapup(state: DialogueState): DodoReply {
-  const phrase = pick(WRAPUP_PHRASES)
-  return {
-    text: phrase.text,
-    translation: phrase.translation,
-    expression: phrase.expression,
-    animation: phrase.animation,
-    stage: 'wrapup',
+    case 'wrapup':
+      return {
+        text: 'That was so fun! You did great today! See you next time! 💝',
+        translation: '太有趣了！你今天表现很棒！下次见！',
+        expression: 'proud',
+        animation: 'sparkle',
+        stage: 'wrapup',
+      }
   }
 }
 
 // ============================================================
-// 导出：生成 Dodo 开场白（对话入口）
+// 生成开场白（对话入口）
 // ============================================================
-export function generateGreeting(
+
+export async function generateGreeting(
   grade: number,
   streak: number,
   emotion?: { pleasure: number; closeness: number },
-): DodoReply {
-  const phrase = pick(WARMUP_PHRASES)
+): Promise<DodoReply> {
+  // 尝试 LLM
+  try {
+    const systemPrompt = `You are Dodo (豆豆), a friendly virtual pet. The child is in grade ${grade}, streak ${streak} days. ${emotion ? `Emotion: pleasure=${emotion.pleasure}, closeness=${emotion.closeness}.` : ''} Give a warm, encouraging greeting. Return JSON: {"text":"...","translation":"...","expression":"happy|excited","animation":"bounce|wave|sparkle","followUp":"..."}`
 
-  // 根据情感状态调整问候
+    const res = await chat([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: 'Greet the child warmly for a new conversation.' },
+    ], { temperature: 0.9 })
+
+    try {
+      const parsed = JSON.parse(extractJSON(res.content))
+      return {
+        text: parsed.text || res.content,
+        translation: parsed.translation,
+        expression: validateExpression(parsed.expression),
+        animation: validateAnimation(parsed.animation),
+        followUp: parsed.followUp || 'What would you like to talk about?',
+        stage: 'warmup',
+      }
+    } catch {
+      // fall through
+    }
+  } catch (err: any) {
+    console.warn('LLM greeting failed:', err.message?.substring(0, 100))
+  }
+
+  // 降级
   if (emotion && emotion.closeness > 0.6) {
     return {
       text: "Hey bestie! I'm so excited to chat with you! 💖",
@@ -604,18 +405,19 @@ export function generateGreeting(
   }
 
   return {
-    text: phrase.text,
-    translation: phrase.translation,
-    expression: phrase.expression,
-    animation: phrase.animation,
+    text: "Hello! Welcome back! I'm so happy to see you! Let's have a fun chat! 😊",
+    translation: '你好！欢迎回来！见到你好开心！我们来场有趣的聊天吧！',
+    expression: 'happy',
+    animation: 'wave',
     followUp: 'What would you like to talk about?',
     stage: 'warmup',
   }
 }
 
 // ============================================================
-// 导出：话题切换
+// 话题切换
 // ============================================================
+
 export function switchTopic(
   grade: number,
   currentTopic: string,

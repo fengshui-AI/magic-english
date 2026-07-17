@@ -74,7 +74,7 @@ dialogueRoutes.post('/start', validateBody(startSchema), async (req: Request, re
       .returning({ id: dialogueSessions.id })
 
     // 生成开场白
-    const greeting = generateGreeting(grade, streak)
+    const greeting = await generateGreeting(grade, streak)
 
     // 合成开场白语音
     const tts = await synthesizeSpeech({ text: greeting.text, voice: 'dodo' })
@@ -146,7 +146,14 @@ dialogueRoutes.post(
       })
 
       // 处理消息，生成 Dodo 回复
-      const reply: DodoReply = processChildMessage(state, body.message)
+      const [user] = await db
+        .select({ grade: users.grade })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1)
+      const grade = user?.grade || 3
+
+      const reply: DodoReply = await processChildMessage(state, body.message, grade)
 
       // 合成回复语音
       const tts = await synthesizeSpeech({ text: reply.text, voice: 'dodo' })
@@ -202,12 +209,14 @@ dialogueRoutes.post('/end', validateBody(endSchema), async (req: Request, res: R
     // 更新数据
     const stats = state
       ? {
-          totalTurns: state.totalTurns,
+          totalTurns: state.history.length,
           childEnglishRatio: Math.round(state.childEnglishRatio * 100),
           childSentenceCount: state.childSentenceCount,
           topic: state.topic,
           wordsUsed: state.targetWords.filter((w) =>
-            state.lastChildMessage.toLowerCase().includes(w.toLowerCase()),
+            state.history.some(
+              (h) => h.speaker === 'child' && h.content.toLowerCase().includes(w.toLowerCase()),
+            ),
           ),
         }
       : null
