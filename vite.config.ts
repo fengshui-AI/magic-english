@@ -2,8 +2,21 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [vue()],
+
+  // ============================================================
+  // 全局常量定义（构建时静态替换，确保所有 chunk 都能拿到值）
+  //   - dev 模式：通过 Vite proxy 代理到本地后端 localhost:3000
+  //   - build 模式：直接请求 CloudRun 线上地址
+  // ============================================================
+  define: {
+    'import.meta.env.VITE_API_BASE': JSON.stringify(
+      mode === 'production'
+        ? 'https://magic-english-api-282732-9-1413580527.sh.run.tcloudbase.com/api/v1'
+        : ''
+    ),
+  },
 
   // ============================================================
   // 构建优化（T7.2 性能优化）
@@ -58,11 +71,8 @@ export default defineConfig({
     port: 5173,
     // API 代理到后端（开发时避免 CORS 问题）
     proxy: {
+      // 将 /api 开头的请求代理到后端 localhost:3000（保留完整路径）
       '/api': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
-      '/health': {
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
@@ -75,4 +85,4 @@ export default defineConfig({
   optimizeDeps: {
     include: ['vue', 'vue-router'],
   },
-})
+}))

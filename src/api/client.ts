@@ -1,4 +1,9 @@
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000/api/v1'
+// API 地址：构建时由 Vite define 静态替换为生产 URL（确保所有 chunk 都包含正确地址）
+// 运行时可通过 window.__API_BASE__ 覆盖（用于调试/动态切换）
+const API_BASE =
+  (typeof window !== 'undefined' && (window as any).__API_BASE__) ||
+  import.meta.env.VITE_API_BASE ||
+  'http://localhost:3000/api/v1'
 
 interface RequestOptions {
   method?: string
