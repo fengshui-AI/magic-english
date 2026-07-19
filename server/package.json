@@ -31,6 +31,7 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@cloudbase/framework-plugin-container": "^1.9.7",
     "@eslint/js": "^10.0.1",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",

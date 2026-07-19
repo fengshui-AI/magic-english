@@ -14,6 +14,8 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { dialogueApi } from '../api/dialogue'
 import { speakText } from '../services/speech'
+import { completeTaskByType } from '../stores/learning'
+import { feedPet } from '../stores/pet'
 import ChatBubble from '../components/ChatBubble.vue'
 import VoiceInput from '../components/VoiceInput.vue'
 
@@ -181,6 +183,10 @@ async function sendMessage(content: string) {
       animation: res.message.animation,
       isNew: true,
     })
+
+    // 完成一次真实对话 → 标记"情景对话"每日任务完成
+    completeTaskByType(['dialogue'], 3)
+    feedPet(30)
 
     // 播放语音
     if (res.audioUrl) {

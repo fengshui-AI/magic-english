@@ -70,7 +70,7 @@ export async function chat(
     throw new Error(`LLM API error ${response.status}: ${errorText.substring(0, 200)}`)
   }
 
-  const data = await response.json()
+  const data = (await response.json()) as any
   const content = data.choices?.[0]?.message?.content || ''
 
   return {

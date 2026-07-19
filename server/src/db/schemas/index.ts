@@ -22,6 +22,7 @@ export const users = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     phone: varchar('phone', { length: 20 }).unique(),
+    passwordHash: varchar('password_hash', { length: 255 }),
     role: varchar('role', { length: 10 }).notNull().default('child'),
     name: varchar('name', { length: 50 }),
     ageSegment: varchar('age_segment', { length: 10 }),

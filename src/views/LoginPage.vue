@@ -84,6 +84,9 @@
             <div class="field">
               <input v-model="form.phone" type="tel" placeholder="爸爸妈妈的手机号" required minlength="11" maxlength="20" />
             </div>
+            <div class="field">
+              <input v-model="form.password" type="password" placeholder="设置密码（至少6位）" required minlength="6" maxlength="50" />
+            </div>
             <template v-if="mode === 'register'">
               <div class="field">
                 <div class="grade-row">
@@ -122,6 +125,9 @@
             <div class="field">
               <input v-model="parentForm.phone" type="tel" placeholder="手机号" required />
             </div>
+            <div class="field">
+              <input v-model="parentForm.password" type="password" placeholder="密码" required />
+            </div>
             <div v-if="parentError" class="error-toast"><span>{{ parentError }}</span></div>
             <button class="auth-btn" :disabled="parentLoading" type="submit">
               {{ parentLoading ? '...' : '登录' }}
@@ -156,8 +162,8 @@ function triggerDodoInteract() {
   interactTimer = setTimeout(() => { dodoInteract.value = false }, 1500)
 }
 
-const form = reactive({ name: '', phone: '', grade: 3 })
-const parentForm = reactive({ phone: '' })
+const form = reactive({ name: '', phone: '', password: '', grade: 3 })
+const parentForm = reactive({ phone: '', password: '' })
 const parentLoading = ref(false)
 const parentError = ref('')
 
@@ -165,9 +171,11 @@ const isLowEnd = typeof navigator !== 'undefined' && (navigator.hardwareConcurre
 const starCount = computed(() => isLowEnd ? 10 : 22)
 
 function friendlyErr(msg: string): string {
-  if (msg.includes('fetch') || msg.includes('network') || msg.includes('Failed')) return '网络有点慢，稍后再试～'
+  if (msg.includes('Phone already registered') || msg.includes('already registered') || msg.includes('已注册')) return '这个手机号注册过啦，直接登录吧～'
+  if (msg.includes('Invalid password') || msg.includes('password')) return '密码不对哦，再试试～'
+  if (msg.includes('fetch') || msg.includes('network') || msg.includes('Failed') || msg.includes('Failed to fetch')) return '网络有点慢，稍后再试～'
   if (msg.includes('phone') || msg.includes('手机')) return '手机号好像不太对，再看看？'
-  if (msg.includes('exist') || msg.includes('已存在')) return '这个手机号注册过啦，直接登录吧～'
+  if (msg.includes('User not found') || msg.includes('not found')) return '这个手机号还没注册哦～'
   return '出了点小问题，再试一次～'
 }
 
@@ -177,9 +185,18 @@ async function handleSubmit() {
   try {
     if (mode.value === 'register') {
       if (!agreed.value) { errorMsg.value = '请先同意协议哦～'; loading.value = false; return }
-      await register({ name: form.name, phone: form.phone, grade: form.grade, role: 'child' })
+      const ageSegment: 'low' | 'mid' | 'high' =
+        form.grade <= 2 ? 'low' : form.grade <= 4 ? 'mid' : 'high'
+      await register({
+        name: form.name,
+        phone: form.phone,
+        password: form.password,
+        grade: form.grade,
+        ageSegment,
+        role: 'child',
+      })
     } else {
-      await login({ phone: form.phone })
+      await login({ phone: form.phone, password: form.password })
     }
     router.push({ name: 'home' })
   } catch (e: any) {
@@ -191,7 +208,7 @@ async function handleParentLogin() {
   parentError.value = ''
   parentLoading.value = true
   try {
-    await login({ phone: parentForm.phone })
+    await login({ phone: parentForm.phone, password: parentForm.password })
     router.push({ name: 'parent-dashboard' })
     showParent.value = false
   } catch (e: any) {
@@ -200,13 +217,16 @@ async function handleParentLogin() {
 }
 
 async function enterAsGuest() {
+  errorMsg.value = ''
+  loading.value = true
   try {
-    await register({ name: '小探险家', role: 'child', grade: 3, ageSegment: 'mid' })
+    const guestId = 'guest_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6)
+    const guestPassword = 'guest_' + Math.random().toString(36).slice(2, 10)
+    await register({ name: guestId, password: guestPassword, role: 'child', grade: 3, ageSegment: 'mid' })
     router.push({ name: 'onboarding' })
   } catch (e: any) {
-    console.error('Guest registration failed:', e)
-    router.push({ name: 'onboarding' })
-  }
+    errorMsg.value = friendlyErr(e.message || '游客注册失败')
+  } finally { loading.value = false }
 }
 
 function starPos(i: number) {

@@ -3,14 +3,16 @@
 // 提供离线缓存和 PWA 安装支持
 // ============================================================
 
-const CACHE_NAME = 'magic-english-v1';
-const RUNTIME_CACHE = 'magic-english-runtime';
+// 更新此版本号可强制所有客户端刷新 SW 缓存
+const CACHE_VERSION = 'v3';
+const CACHE_NAME = `magic-english-${CACHE_VERSION}`;
+const RUNTIME_CACHE = `magic-english-runtime-${CACHE_VERSION}`;
 
-// 需要预缓存的静态资源（构建后自动生成 hash 文件名，此处只缓存入口）
+// 仅预缓存不常变的资源，index.html 不缓存（避免 SW 返回旧版本）
 const PRECACHE_URLS = [
-  '/',
   '/manifest.json',
   '/favicon.svg',
+  '/icons.svg',
 ];
 
 // ============================================================
@@ -55,11 +57,12 @@ self.addEventListener('fetch', (event) => {
   }
 
   // 静态资源：网络优先，网络失败时回退缓存
+  // 但 index.html（'/'）永远走网络，不缓存
   event.respondWith(
     fetch(request)
       .then((response) => {
-        // 只缓存成功的响应
-        if (response.status === 200) {
+        // 只缓存成功的非 HTML 响应（JS/CSS/图片等带 hash 的不会变）
+        if (response.status === 200 && request.destination !== 'document') {
           const cloned = response.clone();
           caches.open(RUNTIME_CACHE).then((cache) => {
             cache.put(request, cloned);
@@ -71,11 +74,7 @@ self.addEventListener('fetch', (event) => {
         // 网络不可用时，尝试从缓存返回
         return caches.match(request).then((cached) => {
           if (cached) return cached;
-          // 对于 SPA 导航请求，返回 index.html
-          if (request.destination === 'document') {
-            return caches.match('/');
-          }
-          // 无法提供缓存，返回离线提示
+          // 无法提供缓存
           return new Response(
             JSON.stringify({ error: 'OFFLINE', message: '当前处于离线状态' }),
             { status: 503, headers: { 'Content-Type': 'application/json' } }

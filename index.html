@@ -29,6 +29,10 @@
   </head>
   <body>
     <div id="app"></div>
+    <!-- 运行时 API 地址注入（兜底方案，构建时 define 静态替换优先） -->
+    <script>
+      window.__API_BASE__ = 'https://magic-english-api-282732-9-1413580527.sh.run.tcloudbase.com/api/v1';
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

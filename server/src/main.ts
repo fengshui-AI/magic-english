@@ -18,6 +18,19 @@ async function autoMigrate() {
     await client.connect()
     console.log('✅ Database connection OK')
 
+    // 确保 password_hash 列存在（向后兼容）
+    try {
+      await client.query(`
+        DO $$ BEGIN
+          ALTER TABLE users ADD COLUMN password_hash VARCHAR(255);
+        EXCEPTION WHEN duplicate_column THEN NULL;
+        END $$;
+      `)
+      console.log('✅ password_hash column ensured')
+    } catch {
+      console.log('⚠️  password_hash column check skipped (permission)')
+    }
+
     const { readFileSync, existsSync } = await import('node:fs')
     const { join, dirname } = await import('node:path')
     const { fileURLToPath } = await import('node:url')

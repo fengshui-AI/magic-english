@@ -19,7 +19,7 @@ beforeAll(async () => {
   const parentRes = await fetch(`${BASE_URL}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone: parentPhone, name: '家长测试', role: 'parent', grade: 3 }),
+    body: JSON.stringify({ phone: parentPhone, name: '家长测试', role: 'parent', password: 'testpass', grade: 3 }),
   })
   const parentData = await parentRes.json()
   parentToken = parentData.token
@@ -30,7 +30,7 @@ beforeAll(async () => {
   const childRes = await fetch(`${BASE_URL}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone: childPhone, name: '孩子测试', role: 'child', grade: 3, ageSegment: 'mid' }),
+    body: JSON.stringify({ phone: childPhone, name: '孩子测试', role: 'child', password: 'testpass', grade: 3, ageSegment: 'mid' }),
   })
   const childData = await childRes.json()
   childToken = childData.token

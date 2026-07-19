@@ -25,6 +25,7 @@ describe('Day0 入学全流程 E2E', () => {
         body: JSON.stringify({
           phone: `1380000${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`,
           name: '测试小朋友',
+          password: 'testpass',
           role: 'child',
           grade: 3,
           ageSegment: 'mid',

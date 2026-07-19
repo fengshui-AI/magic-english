@@ -139,8 +139,8 @@ export async function generateWeeklyReport(
     return d >= range.start && d <= range.end
   })
 
-  const totalReviews = recentWp.reduce((s, w) => s + (w.reviewCount || 0), 0)
-  const totalCorrect = recentWp.reduce((s, w) => s + (w.correctCount || 0), 0)
+  const totalReviews = recentWp.reduce((s: number, w) => s + (w.reviewCount || 0), 0)
+  const totalCorrect = recentWp.reduce((s: number, w) => s + (w.correctCount || 0), 0)
   const avgCorrectRate = totalReviews > 0 ? totalCorrect / totalReviews : 0
 
   // 连胜信息
@@ -172,7 +172,7 @@ export async function generateWeeklyReport(
   const startPleasure = emotions.length > 0 ? emotions[0].pleasure : 0.5
   const endPleasure = emotions.length > 0 ? emotions[emotions.length - 1].pleasure : 0.5
   const avgPleasure =
-    emotions.length > 0 ? emotions.reduce((s, e) => s + e.pleasure, 0) / emotions.length : 0.5
+    emotions.length > 0 ? emotions.reduce((s: number, e) => s + (e.pleasure || 0), 0) / emotions.length : 0.5
 
   let trend: 'up' | 'down' | 'stable' = 'stable'
   if (endPleasure - startPleasure > 0.1) trend = 'up'
@@ -322,7 +322,7 @@ export async function getWeeklyReports(childId: string): Promise<WeeklyReport[]>
     .orderBy(desc(weeklyReports.weekStart))
     .limit(12)
 
-  return reports.map((r) => r.reportContent as WeeklyReport)
+  return reports.map((r: typeof weeklyReports.$inferSelect) => r.reportContent as WeeklyReport)
 }
 
 // ============================================================
