@@ -34,6 +34,8 @@
     <!-- 模式: word — 单词学习 -->
     <transition name="slide" mode="out-in">
       <div v-if="mode === 'word'" key="word" class="word-mode">
+        <!-- 复习标记 -->
+        <div v-if="currentWord?._isReview" class="review-badge">🔄 今日复习</div>
         <!-- 单词卡片 -->
         <div class="word-card">
           <div class="word-illustration" :style="{ background: wordBg }">
@@ -125,6 +127,9 @@
         <div class="speak-actions">
           <button v-if="score === null" class="action-btn listen-btn" @click="playAudio">
             <span>🔊</span> 听示范
+          </button>
+          <button v-if="speakFailed" class="action-btn retry-btn" @click="retrySpeak">
+            <span>🔄</span> 再试一次
           </button>
           <button v-if="score !== null" class="action-btn retry-btn" @click="retrySpeak">
             <span>🔄</span> 再试一次
@@ -226,6 +231,41 @@
         </div>
       </div>
 
+      <!-- 模式: dialogue — 专项对话训练 -->
+      <div v-else-if="mode === 'dialogue'" key="dialogue" class="dialogue-mode">
+        <div class="dialogue-card">
+          <div class="dodo-avatar">🐣</div>
+          <div class="dodo-bubble">
+            <p class="dodo-sentence">{{ currentDodoSentence }}</p>
+            <p class="dodo-cn">{{ currentDodoCn }}</p>
+          </div>
+        </div>
+
+        <div class="dialogue-input-area">
+          <input
+            v-model="childReply"
+            class="reply-input"
+            placeholder="用英语回答，或点🎤说出～"
+            @keyup.enter="submitReply"
+          />
+          <button class="icon-btn mic-btn" @click="startReplyRecognition">🎤</button>
+          <button class="icon-btn send-btn" @click="submitReply">发送</button>
+        </div>
+
+        <transition name="fade">
+          <div v-if="dodoFeedback" class="dodo-feedback" :class="dodoFeedbackLevel">
+            {{ dodoFeedback }}
+          </div>
+        </transition>
+
+        <div class="dialogue-actions">
+          <button class="action-btn next-btn" @click="nextDialogue">
+            <span>→</span> {{ isLastDialogue ? '完成学习' : '下一个词' }}
+          </button>
+        </div>
+        <div class="dialogue-progress">专项对话 {{ dialogueIndex + 1 }} / {{ dialogueWords.length }}</div>
+      </div>
+
       <!-- 模式: result — 学习结算 -->
       <div v-else-if="mode === 'result'" key="result" class="result-mode">
         <div class="result-header">
@@ -280,15 +320,17 @@ import { ref, computed, nextTick, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { petStore, feedPet } from '../stores/pet'
 import { triggerEmotionEvent } from '../stores/emotion'
-import { fetchDailyPlan } from '../stores/learning'
+import { fetchDailyPlan, completeTaskByType } from '../stores/learning'
 import { fetchWords } from '../stores/words'
+import { submitPronounce } from '../stores/session'
 
 const router = useRouter()
 
-// 模式: word | speak | review | result
-const mode = ref<'word' | 'speak' | 'review' | 'result'>('word')
+// 模式: word | speak | review | dialogue | result
+const mode = ref<'word' | 'speak' | 'review' | 'dialogue' | 'result'>('word')
 
 interface LearnWord {
+  wordId?: string
   word: string
   phonetic?: string
   meaning: string
@@ -296,6 +338,7 @@ interface LearnWord {
   exampleCn?: string
   emoji?: string
   bg?: string
+  _isReview?: boolean
 }
 
 // 主题 → emoji/bg 映射表
@@ -326,17 +369,18 @@ async function loadTodayWords() {
   wordsLoading.value = true
   wordsError.value = null
   try {
-    // 先获取每日计划（含今日待学单词 ID）
+    // 获取每日计划，后端已返回完整单词信息
     const plan = await fetchDailyPlan()
-    const wordIds: string[] = (plan?.plan?.newWords || []).map((w: any) => w.wordId || w.id || w)
+    const planWords = plan?.plan?.newWords || []
 
-    if (wordIds.length === 0) {
+    if (planWords.length === 0) {
       // 没有新单词计划，直接从词库取 5 个
       const result = await fetchWords({ limit: 5 })
       if (result && result.items.length > 0) {
         words.value = result.items.map((w) => {
           const style = themeStyle(w.theme)
           return {
+            wordId: w.id,
             word: w.word,
             phonetic: w.phonetic || undefined,
             meaning: w.translation,
@@ -348,26 +392,48 @@ async function loadTodayWords() {
         })
       }
     } else {
-      // 从词库获取对应单词
-      const result = await fetchWords({ limit: 20 })
-      if (result && result.items.length > 0) {
-        const wordMap = new Map(result.items.map((w) => [w.id, w]))
-        words.value = wordIds
-          .map((id) => wordMap.get(id))
-          .filter(Boolean)
-          .map((w) => {
-            const style = themeStyle(w!.theme)
-            return {
-              word: w!.word,
-              phonetic: w!.phonetic || undefined,
-              meaning: w!.translation,
-              example: `Let's learn the word "${w!.word}"!`,
-              exampleCn: `我们来学单词"${w!.translation}"吧！`,
-              emoji: style.emoji,
-              bg: style.bg,
-            }
-          })
-      }
+    // 直接使用 daily-plan 返回的单词数据
+      const reviewItems: any[] = plan?.plan?.reviewQueue || []
+      const newItems: any[] = planWords
+      const allItems = [
+        ...reviewItems.map((r: any) => ({
+          wordId: r.wordId,
+          word: r.word,
+          phonetic: r.phonetic || undefined,
+          meaning: r.translation,
+          example: `Review: do you remember "${r.word}"?`,
+          exampleCn: `复习：还记得"${r.translation}"吗？`,
+          emoji: '🔄',
+          bg: '#fff8e0',
+          _isReview: true,
+        })),
+        ...newItems.map((w: any) => {
+          const style = themeStyle(w.theme)
+          return {
+            wordId: w.wordId,
+            word: w.word,
+            phonetic: w.phonetic || undefined,
+            meaning: w.translation,
+            example: `Let's learn the word "${w.word}"!`,
+            exampleCn: `我们来学单词"${w.translation}"吧！`,
+            emoji: style.emoji,
+            bg: style.bg,
+          }
+        }),
+      ]
+      words.value = allItems.length > 0 ? allItems : newItems.map((w: any) => {
+        const style = themeStyle(w.theme)
+        return {
+          wordId: w.wordId,
+          word: w.word,
+          phonetic: w.phonetic || undefined,
+          meaning: w.translation,
+          example: `Let's learn the word "${w.word}"!`,
+          exampleCn: `我们来学单词"${w.translation}"吧！`,
+          emoji: style.emoji,
+          bg: style.bg,
+        }
+      })
     }
   } catch (e: any) {
     wordsError.value = e.message || '加载单词失败'
@@ -389,6 +455,7 @@ const progressPct = computed(() => (currentIndex.value / words.value.length) * 1
 
 // 跟读状态
 const isRecording = ref(false)
+const speakFailed = ref(false)
 const score = ref<number | null>(null)
 const accuracy = ref(0)
 const fluency = ref(0)
@@ -494,47 +561,116 @@ function shuffle<T>(arr: T[]): T[] {
   return a
 }
 
+// 真实语音播放（浏览器 TTS，免费）
+function speakText(text: string) {
+  if (!('speechSynthesis' in window)) {
+    showToast(`🔊 ${text}`)
+    return
+  }
+  try {
+    window.speechSynthesis.cancel() // 停止上一段，避免叠加
+    const u = new SpeechSynthesisUtterance(text)
+    u.lang = 'en-US'
+    u.rate = 0.9
+    window.speechSynthesis.speak(u)
+  } catch {
+    showToast(`🔊 ${text}`)
+  }
+}
+
 function playAudio() {
-  // Mock: 模拟发音播放
-  const msg = `🔊 播放 "${currentWord.value?.word}" 的标准发音`
-  showToast(msg)
+  const w = currentWord.value?.word
+  if (w) speakText(w)
+}
+
+// 获取浏览器语音识别对象（webkit/chrome 支持）
+function getRecognition(): any {
+  const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+  return SR ? new SR() : null
 }
 
 function startSpeaking() {
+  const recognition = getRecognition()
+  if (!recognition) {
+    showToast('当前浏览器不支持语音识别，请用 Chrome 试试～')
+    return
+  }
   mode.value = 'speak'
   score.value = null
+  speakFailed.value = false
   speakCount.value++
-  // 模拟录音
   isRecording.value = true
-  setTimeout(() => {
+
+  recognition.lang = 'en-US'
+  recognition.interimResults = false
+  recognition.maxAlternatives = 1
+
+  recognition.onresult = (event: any) => {
+    const transcript = (event.results?.[0]?.[0]?.transcript || '').trim().toLowerCase()
+    const target = (currentWord.value?.word || '').toLowerCase().trim()
     isRecording.value = false
-    // 模拟评分
-    const s = Math.floor(Math.random() * 40) + 60
+    speakFailed.value = false
+
+    // 没识别到任何内容 → 不给分，提示重试（修复"啥都没做都给分"）
+    if (!transcript) {
+      speakFailed.value = true
+      showToast('没听清，再试一次吧～')
+      return
+    }
+
+    // 真实评判标准：识别结果与目标词的比对
+    let s: number
+    if (transcript === target) {
+      s = 92 + Math.floor(Math.random() * 9) // 92~100 完全正确
+    } else if (transcript.includes(target) || target.includes(transcript)) {
+      s = 72 + Math.floor(Math.random() * 12) // 72~83 基本正确
+    } else {
+      s = 45 + Math.floor(Math.random() * 15) // 45~59 读到了但不对
+    }
     score.value = s
-    accuracy.value = Math.floor(s * (0.8 + Math.random() * 0.2))
-    fluency.value = Math.floor(s * (0.7 + Math.random() * 0.3))
-    completeness.value = Math.floor(s * (0.75 + Math.random() * 0.25))
-    // 情感事件
+    accuracy.value = Math.min(100, Math.floor(s * (0.85 + Math.random() * 0.15)))
+    fluency.value = Math.min(100, Math.floor(s * (0.8 + Math.random() * 0.2)))
+    completeness.value = Math.min(100, Math.floor(s * (0.8 + Math.random() * 0.2)))
     triggerEmotionEvent(s >= 80 ? 'perfect_score' : 'correct_answer', s / 100, {
       word: currentWord.value?.word || '',
     })
-  }, 2000)
+  }
+
+  recognition.onerror = () => {
+    isRecording.value = false
+    speakFailed.value = true
+    showToast('没听清，再试一次吧～')
+  }
+  recognition.onnomatch = () => {
+    isRecording.value = false
+    speakFailed.value = true
+    showToast('没听清，再试一次吧～')
+  }
+
+  try {
+    recognition.start()
+  } catch {
+    isRecording.value = false
+    speakFailed.value = true
+  }
 }
 
 function retrySpeak() {
-  score.value = null
-  isRecording.value = true
-  setTimeout(() => {
-    isRecording.value = false
-    const s = Math.floor(Math.random() * 20) + 70
-    score.value = s
-    accuracy.value = Math.floor(s * (0.85 + Math.random() * 0.15))
-    fluency.value = Math.floor(s * (0.8 + Math.random() * 0.2))
-    completeness.value = Math.floor(s * (0.8 + Math.random() * 0.2))
-  }, 1500)
+  startSpeaking()
 }
 
 function afterSpeak() {
+  // 把本次跟读的掌握度回传后端，写入 word_progress，驱动艾宾浩斯复习队列
+  const w = currentWord.value
+  if (w?.wordId != null && score.value != null) {
+    submitPronounce({
+      wordId: w.wordId,
+      score: score.value,
+      accuracy: accuracy.value,
+      fluency: fluency.value,
+      completeness: completeness.value,
+    }).catch(() => {})
+  }
   score.value = null
   if (currentIndex.value < words.value.length - 1) {
     currentIndex.value++
@@ -605,6 +741,8 @@ function submitSpelling() {
 }
 
 function playQuizAudio() {
+  const w = reviewQuestion.value?.prompt
+  if (w) speakText(w)
   isPlayingAudio.value = true
   setTimeout(() => {
     isPlayingAudio.value = false
@@ -621,7 +759,7 @@ function nextReview() {
     spellResult.value = ''
     nextTick(() => spellInput.value?.focus())
   } else {
-    showResult()
+    startDialogue()
   }
 }
 
@@ -630,6 +768,105 @@ function showResult() {
   starsEarned.value = Math.floor(correctCount.value / 2) + speakCount.value
   mode.value = 'result'
   feedPet(starsEarned.value * 5)
+  // 真实学习完成后，才把首页对应的每日任务标记为完成（由学习行为驱动）
+  completeTaskByType(['word', 'speak', 'listen'], Math.max(3, starsEarned.value))
+}
+
+// ============================================================
+// 专项对话训练（用今天学的词，加强记忆 + 成就感）
+// ============================================================
+const dialogueWords = computed(() => words.value.slice(0, 3).map((w) => w.word))
+const dialogueIndex = ref(0)
+const childReply = ref('')
+const dodoFeedback = ref('')
+const dodoFeedbackLevel = ref<'good' | 'try' | ''>('')
+const currentDodoSentence = ref('')
+const currentDodoCn = ref('')
+const isLastDialogue = computed(() => dialogueIndex.value >= dialogueWords.value.length - 1)
+
+function dodoSentenceFor(word: string) {
+  const w = word.toLowerCase()
+  return {
+    en: `Look! I see a ${w}. Do you like ${w}s? Tell me yes or no!`,
+    cn: `看！我看到了一只${w}。你喜欢${w}吗？用英语告诉我 yes 或 no！`,
+  }
+}
+
+function startDialogue() {
+  if (dialogueWords.value.length === 0) {
+    showResult()
+    return
+  }
+  dialogueIndex.value = 0
+  childReply.value = ''
+  dodoFeedback.value = ''
+  dodoFeedbackLevel.value = ''
+  showDodoSentence()
+  mode.value = 'dialogue'
+}
+
+function showDodoSentence() {
+  const word = dialogueWords.value[dialogueIndex.value]
+  if (!word) return
+  const s = dodoSentenceFor(word)
+  currentDodoSentence.value = s.en
+  currentDodoCn.value = s.cn
+  speakText(s.en)
+}
+
+function submitReply() {
+  const reply = childReply.value.trim().toLowerCase()
+  const word = dialogueWords.value[dialogueIndex.value]
+  if (!reply) {
+    dodoFeedback.value = '再说一次吧～用英语试试看！'
+    dodoFeedbackLevel.value = 'try'
+    return
+  }
+  if (reply.includes(word) || reply.includes(word + 's')) {
+    dodoFeedback.value = `Great! You said "${word}"! 🌟 You're doing amazing!`
+    dodoFeedbackLevel.value = 'good'
+    feedPet(5)
+    triggerEmotionEvent('perfect_score', 1, { word })
+  } else {
+    dodoFeedback.value = `Good try! Let's say "${word}" together: ${word}!`
+    dodoFeedbackLevel.value = 'try'
+    feedPet(2)
+    triggerEmotionEvent('correct_answer', 0.7, { word })
+  }
+}
+
+function nextDialogue() {
+  if (dialogueIndex.value < dialogueWords.value.length - 1) {
+    dialogueIndex.value++
+    childReply.value = ''
+    dodoFeedback.value = ''
+    dodoFeedbackLevel.value = ''
+    showDodoSentence()
+  } else {
+    showResult()
+  }
+}
+
+function startReplyRecognition() {
+  const recognition = getRecognition()
+  if (!recognition) {
+    showToast('当前浏览器不支持语音，请直接打字～')
+    return
+  }
+  recognition.lang = 'en-US'
+  recognition.interimResults = false
+  recognition.maxAlternatives = 1
+  recognition.onresult = (event: any) => {
+    const text = (event.results?.[0]?.[0]?.transcript || '').trim()
+    childReply.value = text
+    submitReply()
+  }
+  recognition.onerror = () => showToast('没听清，再试一次～')
+  try {
+    recognition.start()
+  } catch {
+    /* ignore */
+  }
 }
 
 const cheerMessage = computed(() => {
@@ -784,6 +1021,16 @@ function showToast(msg: string) {
   display: flex;
   flex-direction: column;
   align-items: center;
+
+.review-badge {
+  background: #fff3cd;
+  color: #856404;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 14px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
   gap: 24px;
 }
 
@@ -1333,6 +1580,120 @@ function showToast(msg: string) {
 .review-actions {
   width: 100%;
   max-width: 360px;
+}
+
+/* ============ 专项对话训练 ============ */
+.dialogue-mode {
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.dialogue-card {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.dodo-avatar {
+  font-size: 48px;
+  flex-shrink: 0;
+  animation: bounce 1.5s ease-in-out infinite;
+}
+
+.dodo-bubble {
+  flex: 1;
+  background: white;
+  border-radius: 16px;
+  padding: 16px 18px;
+  box-shadow: 0 8px 30px rgba(108, 92, 231, 0.1);
+}
+
+.dodo-sentence {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.dodo-cn {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+.dialogue-input-area {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  gap: 8px;
+}
+
+.reply-input {
+  flex: 1;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 2px solid var(--border);
+  font-size: 16px;
+  outline: none;
+  transition: all 0.3s;
+}
+
+.reply-input:focus {
+  border-color: var(--primary);
+}
+
+.icon-btn {
+  width: 48px;
+  border-radius: 14px;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mic-btn {
+  background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+  color: white;
+}
+
+.send-btn {
+  background: linear-gradient(135deg, #00b894, #55efc4);
+  color: white;
+}
+
+.dodo-feedback {
+  width: 100%;
+  max-width: 360px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.dodo-feedback.good {
+  background: #e6fff8;
+  color: #00896c;
+}
+
+.dodo-feedback.try {
+  background: #fff8e6;
+  color: #b8860b;
+}
+
+.dialogue-actions {
+  width: 100%;
+  max-width: 360px;
+}
+
+.dialogue-progress {
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
 /* ============ 结算模式 ============ */

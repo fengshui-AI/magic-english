@@ -169,6 +169,28 @@ export function completeTask(taskId: string, stars: number) {
   }
 }
 
+/**
+ * 按任务类型批量标记完成（由真实学习行为驱动，而非点击即完成）。
+ * 例如：完成一次学习 → completeTaskByType(['word','speak','listen'])
+ */
+export function completeTaskByType(types: string[], stars = 3) {
+  let changed = false
+  dailyTasks.forEach((t) => {
+    if (types.includes(t.type) && !t.completed) {
+      t.completed = true
+      t.stars = stars
+      if (learningStore.progress) {
+        learningStore.progress.summary.totalStars += stars
+      }
+      learningStore.totalStars += stars
+      changed = true
+    }
+  })
+  if (changed) {
+    learningStore.todayMinutes += 5
+  }
+}
+
 export function resetDailyTasks() {
   dailyTasks.forEach((t) => {
     t.completed = false

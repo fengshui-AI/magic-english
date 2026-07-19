@@ -9,6 +9,7 @@ export interface AuthResponse {
 export interface RegisterInput {
   name: string
   phone?: string
+  password: string
   role?: 'child' | 'parent'
   grade?: number
   ageSegment?: 'low' | 'mid' | 'high'
@@ -16,6 +17,7 @@ export interface RegisterInput {
 
 export interface LoginInput {
   phone: string
+  password: string
 }
 
 export const authApi = {

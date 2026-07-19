@@ -476,21 +476,19 @@ learningRoutes.get('/daily-plan', async (req: Request, res: Response) => {
     const learnedIdSet = new Set(learnedIds.map((l) => l.wordId))
 
     // 推荐新词（同年级、未学过）
-    const newWords = await db
+    // 为避免 UUID 序列化问题，查同年级所有候选词后在应用层过滤
+    const candidateLimit = learnedIdSet.size > 0 ? learnedIdSet.size + 10 : 10
+    const candidates = await db
       .select()
       .from(words)
-      .where(
-        and(
-          eq(words.gradeLevel, gradeLevel),
-          ...(learnedIdSet.size > 0
-            ? [sql`${words.id} NOT IN (${[...learnedIdSet].map((id) => `'${id}'`)})`]
-            : []),
-        ),
-      )
-      .limit(5)
+      .where(eq(words.gradeLevel, gradeLevel))
+      .limit(candidateLimit)
+
+    const newWords = candidates.filter((w) => !learnedIdSet.has(w.id)).slice(0, 5)
 
     res.json({
       plan: {
+        _version: '20260718-fix-uuid',
         reviewCount: reviewItems.length,
         newWordCount: newWords.length,
         reviewQueue: reviewItems.map((r) => ({
