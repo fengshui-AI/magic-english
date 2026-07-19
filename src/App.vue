@@ -6,27 +6,21 @@
       </transition>
     </router-view>
 
-    <!-- 底部导航 — 5个Tab -->
+    <!-- 底部导航 — 3个Tab：星球 / 手账本 / 豆豆 -->
     <nav v-if="showNav" class="bottom-nav">
       <router-link to="/" class="nav-item" exact-active-class="active">
-        <span class="nav-icon">🏠</span>
-        <span>花园</span>
+        <span class="nav-icon">🗺️</span>
+        <span class="nav-label">星球</span>
       </router-link>
-      <router-link to="/notebook" class="nav-item" active-class="active">
-        <span class="nav-icon">📖</span>
-        <span>手账本</span>
+
+      <router-link to="/notebook" class="nav-item nav-cta" active-class="active">
+        <span class="nav-icon cta-icon">📖</span>
+        <span class="nav-label">手账本</span>
       </router-link>
-      <router-link to="/chat" class="nav-item nav-cta" active-class="active">
-        <span class="nav-icon cta-icon">💬</span>
-        <span>对话</span>
-      </router-link>
-      <router-link to="/growth" class="nav-item" active-class="active">
-        <span class="nav-icon">🌱</span>
-        <span>成长</span>
-      </router-link>
+
       <router-link to="/pet" class="nav-item" active-class="active">
-        <span class="nav-icon">🐾</span>
-        <span>宠物</span>
+        <span class="nav-icon">🐣</span>
+        <span class="nav-label">豆豆</span>
       </router-link>
     </nav>
   </div>
@@ -46,12 +40,14 @@ const showNav = computed(() => !hideNavRoutes.includes(route.name as string))
 <style scoped>
 .app-container {
   min-height: 100vh;
-  background: var(--bg);
+  min-height: 100dvh;
+  background: var(--bg-primary);
+  padding-bottom: calc(64px + var(--safe-bottom, 0px));
 }
 
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity var(--transition-base);
 }
 
 .fade-enter-from,
@@ -59,7 +55,9 @@ const showNav = computed(() => !hideNavRoutes.includes(route.name as string))
   opacity: 0;
 }
 
-/* 底部导航 */
+/* ============================================================
+   底部导航 — 魔法玻璃质感
+   ============================================================ */
 .bottom-nav {
   position: fixed;
   bottom: 0;
@@ -67,13 +65,15 @@ const showNav = computed(() => !hideNavRoutes.includes(route.name as string))
   transform: translateX(-50%);
   max-width: 480px;
   width: 100%;
-  background: var(--card-bg);
-  border-top: 1px solid var(--border);
   display: flex;
   justify-content: space-around;
-  padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
-  box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.05);
-  z-index: 100;
+  align-items: center;
+  padding: 8px 16px calc(8px + var(--safe-bottom, 0px));
+  background: rgba(15, 15, 35, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border-light);
+  z-index: var(--z-nav);
 }
 
 .nav-item {
@@ -81,55 +81,77 @@ const showNav = computed(() => !hideNavRoutes.includes(route.name as string))
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: 4px 10px;
-  border-radius: var(--radius-xs);
+  padding: 6px 20px;
+  border-radius: var(--radius-xl);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
   text-decoration: none;
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 500;
-  min-width: 52px;
-}
-
-.nav-item.active {
-  color: var(--primary);
-}
-
-.nav-item:hover {
-  background: var(--bg);
-}
-
-.nav-icon {
-  font-size: 20px;
-  line-height: 1;
-}
-
-/* CTA 学习按钮 */
-.nav-cta {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
   position: relative;
 }
 
-.nav-cta .cta-icon {
-  background: linear-gradient(135deg, #6c5ce7, #fd79a8);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  font-size: 24px;
+.nav-item.active {
+  color: var(--text-primary);
 }
 
-.nav-cta::before {
+.nav-item.active::after {
   content: '';
   position: absolute;
-  top: -8px;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, rgba(108, 92, 231, 0.1), rgba(253, 121, 168, 0.1));
-  z-index: -1;
+  bottom: -10px;
+  width: 20px;
+  height: 3px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  box-shadow: var(--glow-primary);
 }
 
-.nav-cta.active::before {
-  background: linear-gradient(135deg, rgba(108, 92, 231, 0.2), rgba(253, 121, 168, 0.2));
+.nav-icon {
+  font-size: 22px;
+  line-height: 1;
+  transition: transform var(--transition-base);
+}
+
+.nav-item.active .nav-icon {
+  transform: scale(1.1);
+}
+
+.nav-label {
+  font-size: 10px;
+  letter-spacing: 0.5px;
+}
+
+/* CTA 手账本 — 魔法高亮 */
+.nav-cta {
+  margin-top: -18px;
+}
+
+.nav-cta .cta-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  font-size: 24px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  box-shadow: 0 4px 20px rgba(107, 92, 231, 0.4), 0 0 40px rgba(255, 107, 157, 0.2);
+  transition: all var(--transition-base);
+}
+
+.nav-cta.active .cta-icon {
+  box-shadow: 0 6px 24px rgba(107, 92, 231, 0.6), 0 0 50px rgba(255, 107, 157, 0.3);
+  transform: scale(1.05);
+}
+
+.nav-cta .nav-label {
+  margin-top: 4px;
+  color: var(--color-primary-light);
+  font-weight: var(--font-semibold);
+}
+
+.nav-cta.active .nav-label {
+  color: var(--text-primary);
 }
 </style>

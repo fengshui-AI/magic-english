@@ -1,125 +1,363 @@
-:root {
-  --primary: #6c5ce7;
-  --primary-light: #a29bfe;
-  --primary-dark: #4a3db3;
-  --secondary: #fd79a8;
-  --accent: #fdcb6e;
-  --success: #00b894;
-  --warning: #f39c12;
-  --danger: #e17055;
-  --bg: #f8f7ff;
-  --card-bg: #ffffff;
-  --text: #2d3436;
-  --text-light: #636e72;
-  --text-muted: #b2bec3;
-  --border: #e8e8f0;
-  --shadow: 0 4px 20px rgba(108, 92, 231, 0.1);
-  --shadow-hover: 0 8px 30px rgba(108, 92, 231, 0.18);
-  --radius: 16px;
-  --radius-sm: 10px;
-  --radius-xs: 8px;
-}
+/**
+ * 豆语星球 — 全局样式
+ * 深色魔法星空主题 + 渐变 + 发光
+ */
 
-* {
+/* ============================================================
+   CSS Reset
+   ============================================================ */
+
+*,
+*::before,
+*::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
-    'Microsoft YaHei', sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  min-height: 100vh;
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  color: var(--text-primary);
+  background: var(--bg-primary);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 #app {
   min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
 }
 
-/* 页面通用样式 */
+/* ============================================================
+   基础元素
+   ============================================================ */
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-weight: var(--font-bold);
+  line-height: var(--leading-tight);
+}
+
+h1 { font-size: var(--text-4xl); }
+h2 { font-size: var(--text-3xl); }
+h3 { font-size: var(--text-2xl); }
+h4 { font-size: var(--text-xl); }
+
+p {
+  margin-bottom: var(--space-4);
+}
+
+a {
+  color: var(--color-primary-light);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+a:hover {
+  color: var(--color-primary);
+}
+
+img, picture, video, canvas, svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+button, input, select, textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+ul, ol {
+  list-style: none;
+}
+
+/* ============================================================
+   星空背景纹理（body 上的微妙点缀）
+   ============================================================ */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background:
+    radial-gradient(1px 1px at 10% 15%, rgba(255,255,255,0.4), transparent),
+    radial-gradient(1px 1px at 25% 35%, rgba(255,255,255,0.3), transparent),
+    radial-gradient(1px 1px at 40% 10%, rgba(255,255,255,0.5), transparent),
+    radial-gradient(1px 1px at 55% 45%, rgba(255,255,255,0.2), transparent),
+    radial-gradient(1px 1px at 70% 25%, rgba(255,255,255,0.4), transparent),
+    radial-gradient(1px 1px at 85% 40%, rgba(255,255,255,0.3), transparent),
+    radial-gradient(2px 2px at 15% 70%, rgba(168,139,250,0.3), transparent),
+    radial-gradient(2px 2px at 60% 80%, rgba(168,139,250,0.2), transparent),
+    radial-gradient(1px 1px at 90% 75%, rgba(255,255,255,0.4), transparent);
+  pointer-events: none;
+  z-index: var(--z-below);
+}
+
+/* ============================================================
+   页面通用布局
+   ============================================================ */
+
 .page {
-  padding: 20px 16px 100px;
+  padding: var(--space-5) var(--space-4) 100px;
   max-width: 480px;
   margin: 0 auto;
   min-height: 100vh;
+  position: relative;
+  z-index: var(--z-base);
 }
 
 .page-header {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: var(--space-6);
 }
 
 .page-header h1 {
-  font-size: 24px;
-  font-weight: 700;
-  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  font-size: var(--text-3xl);
+  font-weight: var(--font-extrabold);
+  background: linear-gradient(135deg, var(--color-primary-light), var(--color-secondary-light));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .page-header p {
-  color: var(--text-light);
-  font-size: 14px;
-  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  margin-top: var(--space-2);
 }
 
-/* 卡片 */
+/* ============================================================
+   玻璃态卡片
+   ============================================================ */
+
 .card {
-  background: var(--card-bg);
-  border-radius: var(--radius);
-  padding: 20px;
-  box-shadow: var(--shadow);
-  transition: all 0.3s ease;
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-md);
+  transition: all var(--transition-slow);
 }
 
 .card:hover {
-  box-shadow: var(--shadow-hover);
-  transform: translateY(-2px);
+  background: var(--bg-card-hover);
+  border-color: var(--border-medium);
+  box-shadow: var(--shadow-lg), var(--glow-primary);
 }
 
-/* 按钮 */
+/* ============================================================
+   按钮体系
+   ============================================================ */
+
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 12px 24px;
-  border-radius: var(--radius-sm);
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-lg);
   border: none;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
   outline: none;
+  position: relative;
+  overflow: hidden;
 }
 
+/* 主按钮 — 魔法紫渐变 + 发光 */
 .btn-primary {
-  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
   color: white;
+  box-shadow: 0 4px 16px rgba(107, 92, 231, 0.3);
 }
-
 .btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(108, 92, 231, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(107, 92, 231, 0.5);
+}
+.btn-primary:active {
+  transform: translateY(0);
 }
 
+/* 次要按钮 — 半透明边框 */
 .btn-secondary {
-  background: var(--bg);
-  color: var(--primary);
-  border: 2px solid var(--primary-light);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  border: 1px solid var(--border-medium);
+}
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--color-primary-light);
 }
 
-.btn-secondary:hover {
-  background: var(--primary);
+/* 强调按钮 — 粉色渐变 */
+.btn-accent {
+  background: linear-gradient(135deg, var(--color-secondary), var(--color-secondary-dark));
+  color: white;
+  box-shadow: 0 4px 16px rgba(255, 107, 157, 0.3);
+}
+.btn-accent:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(255, 107, 157, 0.5);
+}
+
+/* 大按钮 */
+.btn-lg {
+  padding: var(--space-4) var(--space-8);
+  font-size: var(--text-lg);
+  border-radius: var(--radius-2xl);
+}
+
+/* ============================================================
+   动画关键帧
+   ============================================================ */
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.85; }
+}
+
+@keyframes glow {
+  0%, 100% { box-shadow: var(--glow-primary); }
+  50% { box-shadow: var(--glow-strong); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes bounceIn {
+  0% { opacity: 0; transform: scale(0.3); }
+  50% { opacity: 1; transform: scale(1.08); }
+  70% { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes particleFloat {
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  20% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { transform: translateY(-100px) translateX(20px); opacity: 0; }
+}
+
+/* ============================================================
+   动画工具类
+   ============================================================ */
+
+.animate-float { animation: float 3s ease-in-out infinite; }
+.animate-pulse { animation: pulse 2s ease-in-out infinite; }
+.animate-glow { animation: glow 2s ease-in-out infinite; }
+.animate-fade-in { animation: fadeInUp 0.6s var(--ease-out) forwards; }
+.animate-slide-up { animation: slideInUp 0.5s var(--ease-out) forwards; }
+.animate-scale-in { animation: scaleIn 0.4s var(--ease-out) forwards; }
+.animate-bounce-in { animation: bounceIn 0.6s var(--ease-bounce) forwards; }
+.animate-spin { animation: spin 1s linear infinite; }
+
+/* 延迟工具 */
+.anim-delay-1 { animation-delay: 0.1s; }
+.anim-delay-2 { animation-delay: 0.2s; }
+.anim-delay-3 { animation-delay: 0.3s; }
+.anim-delay-4 { animation-delay: 0.4s; }
+.anim-delay-5 { animation-delay: 0.5s; }
+
+/* ============================================================
+   滚动条
+   ============================================================ */
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--text-tertiary);
+  border-radius: var(--radius-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+/* ============================================================
+   选中 + 焦点
+   ============================================================ */
+
+::selection {
+  background: var(--color-primary);
   color: white;
 }
 
-/* 底部导航 */
+:focus-visible {
+  outline: 2px solid var(--color-primary-light);
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   底部导航（全局样式，具体在 App.vue 覆盖）
+   ============================================================ */
+
 .bottom-nav {
   position: fixed;
   bottom: 0;
@@ -127,158 +365,121 @@ body {
   transform: translateX(-50%);
   max-width: 480px;
   width: 100%;
-  background: var(--card-bg);
-  border-top: 1px solid var(--border);
+  background: rgba(15, 15, 35, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border-light);
   display: flex;
   justify-content: space-around;
-  padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
-  box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.05);
-  z-index: 100;
+  padding: var(--space-2) 0 calc(var(--space-2) + var(--safe-bottom));
+  box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.3);
+  z-index: var(--z-nav);
 }
 
 .nav-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 6px 16px;
-  border-radius: var(--radius-xs);
+  gap: 2px;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
   text-decoration: none;
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 500;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: var(--font-medium);
+  min-width: 56px;
 }
 
 .nav-item.active {
-  color: var(--primary);
+  color: var(--color-primary-light);
 }
 
 .nav-item:hover {
-  background: var(--bg);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .nav-icon {
   font-size: 22px;
   line-height: 1;
+  transition: transform var(--transition-base);
 }
 
-/* 动画 */
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-10px);
-  }
+.nav-item.active .nav-icon {
+  transform: scale(1.15);
 }
 
-@keyframes pulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.05);
-  }
+/* CTA 中间按钮 */
+.nav-cta {
+  position: relative;
 }
-
-@keyframes shine {
-  0% {
-    background-position: -200% center;
-  }
-  100% {
-    background-position: 200% center;
-  }
+.nav-cta .nav-icon {
+  font-size: 26px;
+  background: linear-gradient(135deg, var(--color-primary-light), var(--color-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.nav-cta::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(107, 92, 231, 0.15), rgba(255, 107, 157, 0.15));
+  z-index: -1;
 }
-
-.animate-float {
-  animation: float 3s ease-in-out infinite;
-}
-
-.animate-pulse {
-  animation: pulse 2s ease-in-out infinite;
-}
-
-.animate-fade-in {
-  animation: fadeInUp 0.6s ease-out forwards;
+.nav-cta.active::before {
+  background: linear-gradient(135deg, rgba(107, 92, 231, 0.25), rgba(255, 107, 157, 0.25));
+  box-shadow: var(--glow-primary);
 }
 
 /* ============================================================
-   响应式断点
-   - 默认（移动端）: < 480px，单列全宽布局
-   - 平板（≥ 768px）: 适度放宽，更好的视觉比例
-   - 桌面（≥ 1024px）: 居中卡片式布局，保持 max-width 约束
+   响应式
    ============================================================ */
 
-/* 平板及以上 */
 @media (min-width: 768px) {
   .page {
-    padding: 32px 24px 100px;
+    padding: var(--space-8) var(--space-6) 110px;
   }
-
   .page-header h1 {
-    font-size: 28px;
+    font-size: var(--text-4xl);
   }
-
   .page-header p {
-    font-size: 16px;
+    font-size: var(--text-base);
   }
-
   .btn {
-    padding: 14px 28px;
-    font-size: 16px;
+    padding: var(--space-4) var(--space-8);
+    font-size: var(--text-base);
   }
 }
 
-/* 桌面 */
 @media (min-width: 1024px) {
   .page {
-    padding: 40px 32px 120px;
-  }
-
-  .page-header h1 {
-    font-size: 32px;
+    padding: var(--space-10) var(--space-8) 120px;
   }
 }
 
-/* 超小屏幕（320px 级别） */
 @media (max-width: 360px) {
   .page {
-    padding: 12px 10px 90px;
+    padding: var(--space-3) var(--space-3) 90px;
   }
-
   .page-header h1 {
-    font-size: 20px;
+    font-size: var(--text-xl);
   }
-
   .card {
-    padding: 14px;
+    padding: var(--space-3);
   }
-
   .btn {
-    padding: 10px 18px;
-    font-size: 14px;
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--text-sm);
   }
-
   .nav-item {
-    padding: 4px 10px;
-    font-size: 10px;
+    padding: var(--space-1) var(--space-2);
+    font-size: 9px;
   }
-
   .nav-icon {
     font-size: 18px;
   }

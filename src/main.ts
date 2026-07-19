@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
 import './style.css'
+import './styles/tokens.css'
 
 // ============================================================
 // PWA — 注册 Service Worker
