@@ -74,4 +74,11 @@ export const profileApi = {
       suggestedDifficulty: string
       focusTopics: string[]
     }>('/profile/content-signals'),
+
+  /** 保存初始兴趣标签（Onboarding） */
+  saveInterests: (interests: string[]) =>
+    apiRequest<{ saved: boolean }>('/profile/interests', {
+      method: 'PUT',
+      body: { interests },
+    }),
 }

@@ -8,8 +8,10 @@
 
     <!-- 宠物展示区 -->
     <div class="pet-stage card animate-fade-in" style="animation-delay: 0.1s">
-      <div class="pet-display">
-        <!-- PixiJS 豆豆渲染画布 -->
+      <div class="pet-display" :class="'stage-' + (petStore.pet?.stage || 'seed')">
+        <!-- 阶段 Emoji（根据成长阶段变化） -->
+        <div class="stage-emoji">{{ stageEmoji }}</div>
+        <!-- PixiJS 豆豆渲染画布（背景装饰） -->
         <div class="dodo-canvas-wrap">
           <canvas ref="dodoCanvas" class="dodo-canvas"></canvas>
         </div>
@@ -33,15 +35,13 @@
           <div class="evo-bar" :style="{ width: evoPercent + '%' }"></div>
         </div>
         <div class="evo-timeline">
-          <span :class="{ reached: petStore.level >= 1 }">🥚</span>
-          <span class="line" :class="{ active: petStore.level >= 3 }"></span>
-          <span :class="{ reached: petStore.level >= 3 }">🐣</span>
-          <span class="line" :class="{ active: petStore.level >= 5 }"></span>
-          <span :class="{ reached: petStore.level >= 5 }">🦎</span>
-          <span class="line" :class="{ active: petStore.level >= 8 }"></span>
-          <span :class="{ reached: petStore.level >= 8 }">🐉</span>
-          <span class="line" :class="{ active: petStore.level >= 10 }"></span>
-          <span :class="{ reached: petStore.level >= 10 }">🐲</span>
+          <span :class="{ reached: stageReached('seed') }">🌰</span>
+          <span class="line" :class="{ active: stageReached('sprout') }"></span>
+          <span :class="{ reached: stageReached('sprout') }">🌱</span>
+          <span class="line" :class="{ active: stageReached('bloom') }"></span>
+          <span :class="{ reached: stageReached('bloom') }">🌸</span>
+          <span class="line" :class="{ active: stageReached('fruit') }"></span>
+          <span :class="{ reached: stageReached('fruit') }">🌟</span>
         </div>
       </div>
     </div>
@@ -92,23 +92,54 @@
       </div>
     </section>
 
-    <!-- 皮肤 -->
+    <!-- 装扮系统 -->
     <section class="section animate-fade-in" style="animation-delay: 0.4s">
-      <h2 class="section-title">🎨 宠物装扮</h2>
-      <div class="skin-list">
+      <h2 class="section-title">🎨 豆豆装扮</h2>
+      <div class="deco-categories">
+        <button
+          v-for="cat in decoCategories"
+          :key="cat.type"
+          class="deco-cat-btn"
+          :class="{ active: activeDecoType === cat.type }"
+          @click="activeDecoType = cat.type"
+        >{{ cat.label }}</button>
+      </div>
+      <div class="deco-grid">
         <div
-          v-for="skin in skins"
-          :key="skin.id"
-          class="skin-item"
-          :class="{ owned: skin.owned, active: skin.id === petStore.skin }"
+          v-for="d in equippedDecorations"
+          :key="d.id"
+          class="deco-equipped-card"
+          @click="unequipDecoration(d.id)"
         >
-          <div class="skin-preview">{{ skin.emoji }}</div>
-          <div class="skin-name">{{ skin.name }}</div>
-          <div class="skin-status">
-            {{ skin.owned ? (skin.id === petStore.skin ? '使用中' : '已拥有') : '🔒' }}
-          </div>
+          <span class="deco-emoji">{{ d.emoji }}</span>
+          <span class="deco-name">{{ d.name }}</span>
+        </div>
+        <div
+          v-for="d in availableDecorations"
+          :key="d.id"
+          class="deco-card"
+          :class="{ owned: d.owned }"
+          @click="handleDecoClick(d)"
+        >
+          <span class="deco-emoji">{{ d.owned ? d.emoji : '❓' }}</span>
+          <span class="deco-name">{{ d.owned ? d.name : '???' }}</span>
+          <span v-if="!d.owned" class="deco-cost">
+            {{ d.unlockType === 'starlight' ? '⭐' + d.unlockValue : '🔒' }}
+          </span>
         </div>
       </div>
+    </section>
+
+    <!-- 花园入口 -->
+    <section class="section animate-fade-in" style="animation-delay: 0.5s">
+      <button class="garden-entry-btn" @click="$router.push('/garden')">
+        <span class="garden-entry-emoji">🏡</span>
+        <div class="garden-entry-text">
+          <span class="garden-entry-title">豆豆家园</span>
+          <span class="garden-entry-desc">装扮豆豆的小空间</span>
+        </div>
+        <span class="garden-entry-arrow">→</span>
+      </button>
     </section>
 
     <!-- Toast -->
@@ -121,6 +152,8 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { petStore, feedPet, updateMood, fetchMyPet } from '../stores/pet'
+import { gardenStore, fetchGarden, equipDecoration, unequipDecoration, unlockDecoration } from '../stores/garden'
+import type { Decoration } from '../api/decorations'
 import { learningStore } from '../stores/learning'
 import { usePixiDodo } from '../composables/usePixiDodo'
 
@@ -129,7 +162,44 @@ const { playAnimation } = usePixiDodo(dodoCanvas)
 
 onMounted(() => {
   fetchMyPet()
+  fetchGarden()
 })
+
+const activeDecoType = ref('head')
+
+const decoCategories = [
+  { type: 'head', label: '👑' },
+  { type: 'face', label: '😊' },
+  { type: 'neck', label: '🧣' },
+  { type: 'back', label: '🦋' },
+  { type: 'tail', label: '🔔' },
+  { type: 'hand', label: '🪄' },
+  { type: 'effect', label: '✨' },
+]
+
+// 已穿戴的装饰品
+const equippedDecorations = computed(() =>
+  gardenStore.decorations.filter((d) => d.owned && d.equipped)
+)
+
+// 当前分类下可选装饰品
+const availableDecorations = computed(() =>
+  gardenStore.decorations.filter((d) => d.type === activeDecoType.value)
+)
+
+async function handleDecoClick(d: Decoration) {
+  if (!d.owned) {
+    const ok = await unlockDecoration(d.id)
+    if (!ok) {
+      showToast('星光不足～再多多学习就能解锁啦！')
+    } else {
+      showToast(`解锁了 ${d.name}！`)
+    }
+  } else {
+    await equipDecoration(d.id)
+    showToast(`穿上了 ${d.name}！`)
+  }
+}
 
 const toast = ref('')
 const showToast = (msg: string) => {
@@ -148,6 +218,17 @@ const stageLabel = computed(() => {
     legend: '传说级',
   }
   return map[petStore.stage] || '魔法蛋'
+})
+
+// 根据后端 stage 显示不同的阶段 emoji
+const stageEmoji = computed(() => {
+  const map: Record<string, string> = {
+    seed: '🌰',
+    sprout: '🌱',
+    bloom: '🌸',
+    fruit: '🌟',
+  }
+  return map[petStore.pet?.stage || ''] || '🌰'
 })
 
 const moodEmoji = computed(() => {
@@ -174,12 +255,13 @@ const evoPercent = computed(() => {
   return Math.round((petStore.exp / petStore.expToNext) * 100)
 })
 
-const skins = [
-  { id: 'default', name: '原皮', emoji: '🥚', owned: true },
-  { id: 'fire', name: '火焰', emoji: '🔥', owned: false },
-  { id: 'ice', name: '冰霜', emoji: '❄️', owned: false },
-  { id: 'star', name: '星空', emoji: '🌟', owned: false },
-]
+// 判断是否到达某个阶段（用于进化时间线高亮）
+const stageOrder = ['seed', 'sprout', 'bloom', 'fruit']
+function stageReached(stage: string): boolean {
+  const currentIdx = stageOrder.indexOf(petStore.pet?.stage || 'seed')
+  const targetIdx = stageOrder.indexOf(stage)
+  return currentIdx >= targetIdx
+}
 
 function doSpeak() {
   updateMood('excited')
@@ -223,6 +305,45 @@ function doStory() {
   position: relative;
   display: inline-block;
   margin-bottom: 16px;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  transition: background 0.8s ease;
+  overflow: hidden;
+}
+
+/* 各阶段背景色 */
+.pet-display.stage-seed {
+  background: radial-gradient(circle, #f5e6d3 0%, #e8d5b7 100%);
+}
+
+.pet-display.stage-sprout {
+  background: radial-gradient(circle, #d4f5d4 0%, #a8e6a8 100%);
+}
+
+.pet-display.stage-bloom {
+  background: radial-gradient(circle, #fce4ec 0%, #f8bbd0 100%);
+}
+
+.pet-display.stage-fruit {
+  background: radial-gradient(circle, #fff9c4 0%, #ffe082 100%);
+}
+
+/* 阶段 emoji */
+.stage-emoji {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 80px;
+  z-index: 2;
+  animation: stage-float 3s ease-in-out infinite;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15));
+}
+
+@keyframes stage-float {
+  0%, 100% { transform: translate(-50%, -50%) translateY(0); }
+  50% { transform: translate(-50%, -50%) translateY(-8px); }
 }
 
 .pet-avatar {
@@ -415,45 +536,119 @@ function doStory() {
   color: var(--text-muted);
 }
 
-/* 皮肤列表 */
-.skin-list {
+/* 装扮系统 */
+.deco-categories {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+}
+
+.deco-cat-btn {
+  padding: 6px 14px;
+  border-radius: 16px;
+  border: 1.5px solid #e8e4da;
+  background: #fff;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.deco-cat-btn.active {
+  background: linear-gradient(135deg, #f5f0e8, #ede4d3);
+  border-color: #c9a96e;
+}
+
+.deco-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 10px;
 }
 
-.skin-item {
+.deco-card, .deco-equipped-card {
   text-align: center;
-  padding: 14px 8px;
-  background: var(--bg);
-  border-radius: var(--radius-sm);
-  border: 2px solid transparent;
+  padding: 12px 8px;
+  background: #fafafa;
+  border-radius: 12px;
+  border: 2px solid #e8e4da;
+  cursor: pointer;
   transition: all 0.2s;
 }
 
-.skin-item.owned {
-  cursor: pointer;
+.deco-card.owned {
+  background: #fef9e7;
+  border-color: #e8d5b7;
 }
 
-.skin-item.active {
-  border-color: var(--primary);
-  background: rgba(108, 92, 231, 0.06);
+.deco-equipped-card {
+  background: linear-gradient(135deg, #f0e6d3, #e8d5b7);
+  border-color: #c9a96e;
 }
 
-.skin-preview {
+.deco-emoji {
   font-size: 28px;
-  margin-bottom: 6px;
+  display: block;
+  margin-bottom: 4px;
 }
 
-.skin-name {
-  font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 2px;
-}
-
-.skin-status {
+.deco-name {
   font-size: 11px;
-  color: var(--text-muted);
+  font-weight: 600;
+  color: #5c5544;
+}
+
+.deco-cost {
+  font-size: 10px;
+  color: #c9a96e;
+  font-weight: 600;
+}
+
+/* 花园入口 */
+.garden-entry-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+  border: none;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: inherit;
+}
+
+.garden-entry-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(76,175,80,0.2);
+}
+
+.garden-entry-emoji {
+  font-size: 32px;
+}
+
+.garden-entry-text {
+  flex: 1;
+  text-align: left;
+}
+
+.garden-entry-title {
+  display: block;
+  font-size: 16px;
+  font-weight: 700;
+  color: #2e7d32;
+}
+
+.garden-entry-desc {
+  display: block;
+  font-size: 12px;
+  color: #558b2f;
+  margin-top: 2px;
+}
+
+.garden-entry-arrow {
+  font-size: 22px;
+  color: #4caf50;
 }
 
 /* Toast */

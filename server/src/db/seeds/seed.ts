@@ -4,32 +4,52 @@ import 'dotenv/config'
 import { db } from '../index.js'
 import { words, users } from '../schemas/index.js'
 import { seedWords } from '../seed-data.js'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 
 async function seed() {
   console.log('🌱 Seeding database...')
 
-  // 检查是否已有数据
   const existing = await db.select().from(words).limit(1)
-  if (existing.length > 0) {
-    console.log(`⚠️  Words table already has ${existing.length}+ words. Skipping seed.`)
-    console.log('   To re-seed, truncate the words table first.')
-    return
-  }
 
-  // 批量插入 500 词
-  let inserted = 0
-  for (const w of seedWords) {
-    try {
-      await db.insert(words).values(w)
-      inserted++
-    } catch (err: any) {
-      // 跳过重复词（如果 unique 约束已存在）
-      if (err.code === '23505') continue
-      console.error(`❌ Failed to insert "${w.word}":`, err.message?.substring(0, 80))
+  if (existing.length === 0) {
+    // ============================================================
+    // 首次种子：批量插入 500 词
+    // ============================================================
+    let inserted = 0
+    for (const w of seedWords) {
+      try {
+        await db.insert(words).values(w)
+        inserted++
+      } catch (err: any) {
+        if (err.code === '23505') continue
+        console.error(`❌ Failed to insert "${w.word}":`, err.message?.substring(0, 80))
+      }
     }
+    console.log(`✅ Seeded ${inserted}/${seedWords.length} words`)
+  } else {
+    // ============================================================
+    // 已有数据：更新 sentence / sentenceCn（按 word 匹配）
+    // ============================================================
+    console.log(`📦 Words table has data. Updating sentence / sentenceCn fields...`)
+    let updated = 0
+    let skipped = 0
+    for (const w of seedWords) {
+      try {
+        const result = await db
+          .update(words)
+          .set({ sentence: w.sentence, sentenceCn: w.sentenceCn })
+          .where(eq(words.word, w.word))
+        if (result.rowCount && result.rowCount > 0) {
+          updated++
+        } else {
+          skipped++
+        }
+      } catch (err: any) {
+        console.error(`❌ Failed to update "${w.word}":`, err.message?.substring(0, 80))
+      }
+    }
+    console.log(`✅ Updated ${updated} words with sentences (${skipped} skipped)`)
   }
-  console.log(`✅ Seeded ${inserted}/${seedWords.length} words`)
 
   // 创建 demo 用户
   const [demoUser] = await db

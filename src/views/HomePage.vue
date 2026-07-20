@@ -30,6 +30,10 @@
       </div>
 
       <div class="header-right">
+        <!-- 家长入口：仅家长角色可见 -->
+        <button v-if="authStore.user?.role === 'parent'" class="parent-entry" @click="$router.push('/parent')" title="成长观察室">
+          <span class="parent-entry-icon">🌿</span>
+        </button>
         <!-- 魔法值 -->
         <div class="magic-power">
           <span class="mp-icon">💎</span>
@@ -44,6 +48,25 @@
     <div class="greeting">
       <p class="greeting-wave">{{ greetingIcon }} {{ greetingText }}</p>
       <p class="greeting-sub">{{ greetingSub }}</p>
+    </div>
+
+    <!-- ============================================================
+         今日惊喜（70%概率触发，30%平淡日）
+         ============================================================ -->
+    <transition name="surprise-fade">
+      <div v-if="todaySurprise" class="surprise-card" @click="todaySurprise = null">
+        <div class="surprise-header">
+          <span class="surprise-emoji">{{ todaySurprise.emoji }}</span>
+          <span class="surprise-badge">{{ todaySurprise.badge }}</span>
+        </div>
+        <p class="surprise-text">{{ todaySurprise.text }}</p>
+        <p class="surprise-hint">{{ todaySurprise.hint }}</p>
+      </div>
+    </transition>
+
+    <!-- 平淡日提示 -->
+    <div v-if="isQuietDay" class="quiet-day-hint">
+      <span>🌿 今天是平静的一天，和豆豆轻松学两个单词就好～</span>
     </div>
 
     <!-- ============================================================
@@ -215,10 +238,25 @@
          ============================================================ -->
     <div class="dodo-entry" @click="$router.push('/pet')">
       <div class="dodo-card">
-        <DodoEmotion />
+        <DodoEmotion :show-indicators="true" />
         <div class="dodo-text">
           <span class="dodo-label">去找豆豆玩 →</span>
+          <span class="dodo-closeness">{{ closenessLabel }}</span>
         </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         花园入口
+         ============================================================ -->
+    <div class="garden-entry" @click="$router.push('/garden')">
+      <div class="garden-entry-card">
+        <span class="garden-entry-emoji">🏡</span>
+        <div class="garden-entry-text">
+          <span class="garden-entry-title">豆豆家园</span>
+          <span class="garden-entry-sub">装扮豆豆的小世界</span>
+        </div>
+        <span class="garden-entry-arrow">→</span>
       </div>
     </div>
 
@@ -239,11 +277,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { authStore, logout } from '../stores/auth'
+import { logout, authStore } from '../stores/auth'
 import { petStore } from '../stores/pet'
 import { learningStore, fetchDailyPlan } from '../stores/learning'
 import { streakStore, fetchStreakState } from '../stores/streak'
 import { emotionStore, fetchEmotionState } from '../stores/emotion'
+import { closenessLevel } from '../stores/emotion'
 import DodoEmotion from '../components/DodoEmotion.vue'
 import StreakFlame from '../components/StreakFlame.vue'
 
@@ -269,10 +308,9 @@ interface Region {
 }
 
 const regions = computed<Region[]>(() => {
-  const userLevel = learningStore.grade || 1
   const userUnit = learningStore.unit || 1
-  // 用年级 + 单元来推算当前进度（每 unit 大约解锁一个区域）
-  const currentRegionId = Math.min(userLevel, 7)
+  // 用独立的 currentRegionId 跟踪当前关卡，不复用 grade
+  const currentRegionId = activeRegionId.value
 
   return [
     {
@@ -333,6 +371,9 @@ const regions = computed<Region[]>(() => {
     },
   ]
 })
+
+// 当前活跃的关卡 ID（默认为用户年级对应的关卡）
+const activeRegionId = ref(Math.min(learningStore.grade || 3, 7))
 
 function regionState(id: number, currentId: number, _unit: number) {
   if (id < currentId) {
@@ -427,6 +468,15 @@ function wordEmoji(theme?: string | null) { return THEME_EMOJI[theme || ''] || '
 
 const toast = computed(() => emotionStore.toastMessage || '')
 
+// 陪伴梯度标签（无数字，只有情感化表达）
+const closenessLabel = computed(() => {
+  const c = emotionStore.emotion?.closeness || 0.2
+  if (c >= 0.7) return '💖 最好的朋友'
+  if (c >= 0.5) return '🌟 好朋友'
+  if (c >= 0.3) return '🌱 正在熟悉'
+  return '👋 初次见面'
+})
+
 // 问候语
 const greetingIcon = computed(() => {
   const h = new Date().getHours()
@@ -439,18 +489,95 @@ const greetingText = computed(() => {
 })
 const greetingSub = computed(() => {
   const name = petStore.name || '豆豆'
-  if (streakStore.currentStreak >= 7) return `${name} 说：连续 ${streakStore.currentStreak} 天！你是真正的魔法大师 ✨`
-  if (streakStore.currentStreak >= 3) return `${name} 说：${streakStore.currentStreak} 天连学了，魔力在增长～`
-  return `${name} 在星球上等你探险呢 🚀`
+  const closeness = emotionStore.emotion?.closeness || 0.2
+  const level = closenessLevel(closeness)
+  const streak = streakStore.currentStreak
+
+  // 陪伴梯度融入问候语
+  const gradientMessages: Record<string, string[]> = {
+    '亲密无间': [
+      `${name} 一看到你就超开心！今天也想和你一起学英语 💖`,
+      `${name} 已经把你当成最好的朋友了！一起加油吧 🌟`,
+    ],
+    '好朋友': [
+      `${name} 越来越喜欢和你在一起了～`,
+      `${name} 说：和你学习是最快乐的时光！`,
+    ],
+    '认识中': [
+      `${name} 在星球上等你探险呢 🚀`,
+      `${name} 正在慢慢认识你，每天多了解一点点～`,
+    ],
+    '初次见面': [
+      `${name} 有点害羞，但很期待和你做朋友 🌱`,
+      `${name} 在星球上等你探险呢 🚀`,
+    ],
+  }
+
+  const msgs = gradientMessages[level] || gradientMessages['初次见面']
+  const baseMsg = msgs[Math.floor(Math.random() * msgs.length)]
+
+  if (streak >= 7) return `${baseMsg}（连续 ${streak} 天啦 ✨）`
+  if (streak >= 3) return `${baseMsg}（第 ${streak} 天连学！）`
+  return baseMsg
 })
+
+// ============================================================
+// 每日惊喜池（PRD 8.2-8.5）
+// 70%概率触发惊喜事件，30%为平淡日
+// ============================================================
+interface Surprise {
+  emoji: string
+  badge: string
+  text: string
+  hint: string
+}
+
+const todaySurprise = ref<Surprise | null>(null)
+const isQuietDay = ref(false)
+
+// 惊喜池 — 根据性格/特长/时间/连胜动态选择
+const SURPRISE_POOL: Surprise[] = [
+  { emoji: '🎁', badge: '今日惊喜', text: '豆豆发现了一个神秘单词盲盒！打开看看是什么单词？', hint: '点击开始学习 →' },
+  { emoji: '🌟', badge: '幸运日', text: '今天的星光翻倍！每次学习都能获得双倍星光哦～', hint: '快去赚星光吧！' },
+  { emoji: '📖', badge: '新故事', text: '豆豆昨晚做了一个梦，梦里有一个关于英语单词的奇妙故事想讲给你听！', hint: '去学习页面听故事 →' },
+  { emoji: '🎵', badge: '音乐时间', text: '豆豆今天心情特别好，想和你一起唱首英文歌！准备好了吗？', hint: '去对话页面一起唱 →' },
+  { emoji: '🦋', badge: '发现彩蛋', text: '咦？豆豆的头上好像多了什么东西...是一只蝴蝶！它带来了一个秘密单词！', hint: '去找豆豆看看 →' },
+  { emoji: '🌈', badge: '奇迹日', text: '天空中出现了一道彩虹！豆豆说这是"奇迹日"，今天学会的单词会记得特别牢！', hint: '趁现在多学几个单词！' },
+  { emoji: '🍀', badge: '幸运草', text: '豆豆在花园里发现了一株四叶草！它说今天你会特别幸运～', hint: '幸运日适合挑战新单词！' },
+  { emoji: '🔮', badge: '水晶预言', text: '豆豆的水晶球发光了！它预言你今天会解锁一个新成就！', hint: '试试完成学习目标 →' },
+  { emoji: '🎪', badge: '迷你嘉年华', text: '豆豆在花园里搭了一个迷你嘉年华！每个单词摊位都有小惊喜～', hint: '去花园看看吧 →' },
+  { emoji: '💫', badge: '流星之夜', text: '一颗流星划过！豆豆说快许愿——它帮你记住今天最难的那个单词！', hint: '今天最难的词也会变简单！' },
+  { emoji: '🐚', badge: '海边来信', text: '海浪送来了一封信！里面是一个来自远方的新单词～', hint: '拆开看看是什么词 →' },
+  { emoji: '🕯️', badge: '秘密时刻', text: '豆豆点了一根小蜡烛，悄悄告诉你一个记单词的小秘诀...', hint: '点击学习 →' },
+]
+
+function generateDailySurprise() {
+  // 30% 概率平淡日
+  const roll = Math.random()
+  if (roll < 0.3) {
+    isQuietDay.value = true
+    todaySurprise.value = null
+    return
+  }
+
+  isQuietDay.value = false
+
+  // 根据时间段和连胜调整惊喜池权重（预留后续加权）
+  void new Date().getHours()
+  void streakStore.currentStreak
+
+  // 随机选一个惊喜（后续可根据性格/特长做加权）
+  const idx = Math.floor(Math.random() * SURPRISE_POOL.length)
+  todaySurprise.value = SURPRISE_POOL[idx]
+}
 
 // ============================================================
 // 交互
 // ============================================================
 function selectRegion(region: Region) {
   if (region.locked) return
-  // 设置年级 = 区域等级，然后开始学习
   learningStore.grade = region.level
+  activeRegionId.value = region.id
   router.push('/learn')
 }
 
@@ -474,6 +601,7 @@ onMounted(() => {
   fetchDailyPlan().catch(() => {})
   fetchStreakState().catch(() => {})
   fetchEmotionState().catch(() => {})
+  generateDailySurprise()
 })
 </script>
 
@@ -569,6 +697,33 @@ onMounted(() => {
   color: var(--color-accent);
 }
 
+/* 家长入口 */
+.parent-entry {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  margin-right: 8px;
+}
+
+.parent-entry:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: var(--glow-accent);
+}
+
+.parent-entry-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
 /* 魔法值 */
 .magic-power {
   display: flex;
@@ -609,6 +764,94 @@ onMounted(() => {
   color: var(--text-secondary);
   margin: 6px 0 0;
   line-height: var(--leading-relaxed);
+}
+
+/* ============================================================
+   每日惊喜卡片
+   ============================================================ */
+.surprise-card {
+  margin: 8px 16px 0;
+  padding: 16px;
+  background: linear-gradient(135deg, #fff8e1, #fff3e0);
+  border-radius: 16px;
+  border: 1.5px solid rgba(255, 183, 77, 0.3);
+  cursor: pointer;
+  position: relative;
+  z-index: var(--z-above);
+  animation: surprise-in 0.5s ease;
+  box-shadow: 0 4px 16px rgba(255, 152, 0, 0.1);
+}
+
+@keyframes surprise-in {
+  from { opacity: 0; transform: translateY(-10px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.surprise-card:hover {
+  border-color: rgba(255, 152, 0, 0.5);
+  box-shadow: 0 6px 20px rgba(255, 152, 0, 0.15);
+  transform: translateY(-1px);
+}
+
+.surprise-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.surprise-emoji {
+  font-size: 24px;
+  animation: bounce 1s ease-in-out infinite;
+}
+
+.surprise-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #e65100;
+  background: rgba(255, 152, 0, 0.12);
+  padding: 2px 10px;
+  border-radius: 10px;
+}
+
+.surprise-text {
+  font-size: 14px;
+  color: #5d4037;
+  line-height: 1.6;
+  margin: 0 0 6px;
+}
+
+.surprise-hint {
+  font-size: 12px;
+  color: #ff8f00;
+  font-weight: 500;
+  margin: 0;
+}
+
+.surprise-fade-leave-active {
+  transition: all 0.3s ease;
+}
+
+.surprise-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+/* 平淡日 */
+.quiet-day-hint {
+  margin: 8px 16px 0;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  position: relative;
+  z-index: var(--z-above);
+  text-align: center;
+}
+
+.quiet-day-hint span {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
 }
 
 /* ============================================================
@@ -1073,6 +1316,63 @@ onMounted(() => {
   font-size: var(--text-base);
   font-weight: var(--font-bold);
   color: var(--text-primary);
+}
+
+.dodo-closeness {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* ============================================================
+   花园入口
+   ============================================================ */
+.garden-entry {
+  padding: 0 16px 16px;
+  position: relative;
+  z-index: var(--z-above);
+}
+
+.garden-entry-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border-radius: var(--radius-2xl);
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.1), rgba(139, 195, 74, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.garden-entry-card:hover {
+  border-color: #4caf50;
+  box-shadow: 0 4px 16px rgba(76, 175, 80, 0.15);
+  transform: translateY(-2px);
+}
+
+.garden-entry-emoji { font-size: 32px; }
+
+.garden-entry-text { flex: 1; }
+
+.garden-entry-title {
+  display: block;
+  font-size: var(--text-base);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+}
+
+.garden-entry-sub {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.garden-entry-arrow {
+  font-size: 20px;
+  color: #4caf50;
 }
 
 /* ============================================================

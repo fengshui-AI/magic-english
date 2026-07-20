@@ -31,34 +31,251 @@
       <span class="progress-text">{{ currentIndex + 1 }} / {{ words.length }}</span>
     </div>
 
-    <!-- 模式: word — 单词学习 -->
+    <!-- 模式: word — 五步渐进学习（PRD 7.3.4） -->
     <transition name="slide" mode="out-in">
       <div v-if="mode === 'word'" key="word" class="word-mode">
         <!-- 复习标记 -->
         <div v-if="currentWord?._isReview" class="review-badge">🔄 今日复习</div>
-        <!-- 单词卡片 -->
-        <div class="word-card">
+
+        <!-- 步骤指示器 -->
+        <div class="step-indicator">
+          <span
+            v-for="s in (skipSpelling ? 4 : 5)"
+            :key="s"
+            class="step-dot"
+            :class="{ active: s === subStep, done: s < subStep }"
+          ></span>
+          <span class="step-label">{{ subStepTitle }}</span>
+        </div>
+
+        <!-- 引导语 -->
+        <p class="step-hint">{{ subStepHint }}</p>
+
+        <!-- ============================================================ -->
+        <!-- Step 1 & 2: 单词卡片（图文布局：图→中文→英文→音标） -->
+        <!-- ============================================================ -->
+        <div v-if="subStep <= 2" class="word-card">
+          <!-- 配图 emoji（低年级显示） -->
+          <div v-if="showWordEmoji" class="word-emoji-big">{{ wordEmoji }}</div>
+
+          <div class="word-display">
+            <!-- 中文在上，英文在下 -->
+            <p class="word-meaning">{{ currentWord?.meaning || '单词释义' }}</p>
+            <h2 class="word-text">{{ currentWord?.word }}</h2>
+            <p class="word-phonetic">{{ currentWord?.phonetic || '/fəˈnetɪk/' }}</p>
+          </div>
+
+          <!-- 故事锚点（Step 1 展示） -->
+          <div v-if="subStep === 1 && storyAnchor" class="story-anchor-box">
+            <div class="story-anchor-header">
+              <span>📖 豆豆小故事</span>
+              <span class="story-prototype-tag">{{ storyAnchor.prototype }}</span>
+            </div>
+            <p class="story-anchor-text">{{ storyAnchor.text }}</p>
+          </div>
+
+          <!-- Step 2: 跟读评分结果 -->
+          <div v-if="subStep === 2 && subStepScore !== null" class="substep-score" :class="scoreLevelClass(subStepScore)">
+            <span class="score-icon">{{ scoreEmoji(subStepScore) }}</span>
+            <span>{{ scoreFeedback(subStepScore) }}</span>
+          </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- Step 3: 词组卡片 -->
+        <!-- ============================================================ -->
+        <div v-if="subStep === 3" class="word-card phrase-card">
+          <div class="word-illustration phrase-illustration" :style="{ background: wordBg }">
+            <span class="phrase-icon">🔗</span>
+          </div>
+          <div class="word-display">
+            <h2 class="phrase-text">"{{ phraseHint }}"</h2>
+            <p class="word-meaning">{{ currentWord?.meaning }} — 词组搭配</p>
+          </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- Step 4: 例句卡片 + 跟读 -->
+        <!-- ============================================================ -->
+        <div v-if="subStep === 4" class="word-card">
           <div class="word-illustration" :style="{ background: wordBg }">
-            <span class="word-emoji">{{ wordEmoji }}</span>
+            <span class="word-emoji">📝</span>
           </div>
           <div class="word-display">
             <h2 class="word-text">{{ currentWord?.word }}</h2>
-            <p class="word-phonetic">{{ currentWord?.phonetic || '/fəˈnetɪk/' }}</p>
-            <p class="word-meaning">{{ currentWord?.meaning || '单词释义' }}</p>
           </div>
-
-          <!-- 例句 -->
           <div class="example-box">
             <p class="example-en">"{{ currentWord?.example || 'This is an example sentence.' }}"</p>
             <p class="example-cn">{{ currentWord?.exampleCn || '这是一个例句。' }}</p>
           </div>
+
+          <!-- 跟读评分结果 -->
+          <div v-if="subStepScore !== null" class="substep-score" :class="scoreLevelClass(subStepScore)">
+            <span class="score-icon">{{ scoreEmoji(subStepScore) }}</span>
+            <span>{{ scoreFeedback(subStepScore) }}</span>
+          </div>
         </div>
 
-        <!-- 操作按钮 -->
+        <!-- ============================================================ -->
+        <!-- Step 5: 拼写挑战（年级分级填空 + 悬浮字母块） -->
+        <!-- ============================================================ -->
+        <div v-if="subStep === 5" class="word-card spell-card">
+          <div class="word-illustration" :style="{ background: wordBg }">
+            <span class="word-emoji">✍️</span>
+          </div>
+          <div class="word-display">
+            <p class="spell-prompt">
+              「{{ currentWord?.meaning }}」的英文是？
+              <span class="spell-hint-text">{{ spellHintText }}</span>
+            </p>
+          </div>
+
+          <!-- 填空模式（1-3年级） -->
+          <div v-if="spellMode === 'gap'" class="spell-gap-row">
+            <template v-for="(seg, si) in spellSegments" :key="si">
+              <span v-if="!seg.isGap" class="spell-char">{{ seg.text }}</span>
+              <span
+                v-else
+                class="spell-gap"
+                :class="{
+                  active: currentGapIndex === seg.gapIndex,
+                  filled: seg.userInput !== '',
+                  'gap-correct': spellStepResult === 'correct',
+                  'gap-wrong': spellStepResult === 'wrong' && seg.userInput !== seg.answer,
+                }"
+                @click="focusGap(seg.gapIndex!)"
+              >
+                {{ seg.userInput || ' ' }}
+              </span>
+            </template>
+          </div>
+
+          <!-- 完整拼写模式（4年级+） -->
+          <div v-else class="spell-input-wrap">
+            <input
+              ref="spellInput"
+              v-model="spellStepAnswer"
+              type="text"
+              class="spell-input step-spell"
+              :class="{ correct: spellStepResult === 'correct', wrong: spellStepResult === 'wrong' }"
+              placeholder="输入英文拼写..."
+              :disabled="spellStepResult !== ''"
+              @keyup.enter="submitStepSpelling"
+            />
+          </div>
+
+          <div v-if="spellStepResult" class="spell-feedback" :class="spellStepResult">
+            {{
+              spellStepResult === 'correct'
+                ? '✅ 太棒了！拼写正确！'
+                : `❌ 正确答案是: ${currentWord?.word}`
+            }}
+          </div>
+        </div>
+
+        <!-- 悬浮字母块（填空模式下显示） -->
+        <div v-if="subStep === 5 && spellMode === 'gap' && spellStepResult === ''" class="letter-keyboard">
+          <div class="letter-row">
+            <button class="letter-key letter-action" @click="tapDelete">
+              ⌫
+            </button>
+          </div>
+          <div class="letter-row letter-vowels">
+            <button
+              v-for="ch in 'aeiou'.split('')"
+              :key="'v'+ch"
+              class="letter-key letter-vowel"
+              :disabled="isLetterUsed(ch)"
+              @click="tapLetter(ch)"
+            >{{ ch }}</button>
+          </div>
+          <div class="letter-row">
+            <button
+              v-for="ch in 'bcdfghjklmnpqrstvwxyz'.split('')"
+              :key="'c'+ch"
+              class="letter-key letter-consonant"
+              :disabled="isLetterUsed(ch)"
+              @click="tapLetter(ch)"
+            >{{ ch }}</button>
+          </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- 操作按钮（根据子步骤变化） -->
+        <!-- ============================================================ -->
         <div class="word-actions">
-          <button class="action-btn listen-btn" @click="playAudio"><span>🔊</span> 听发音</button>
-          <button class="action-btn speak-btn" @click="startSpeaking"><span>🎤</span> 跟读</button>
-          <button class="action-btn next-btn" @click="markKnown"><span>✅</span> 我认识了</button>
+          <!-- Step 1: 听单词 -->
+          <template v-if="subStep === 1">
+            <button class="action-btn listen-btn" @click="playSubStepTTS">
+              <span>🔊</span> 再听一遍
+            </button>
+            <button class="action-btn next-btn" @click="nextSubStep">
+              <span>→</span> 下一步
+            </button>
+          </template>
+
+          <!-- Step 2: 跟读单词 -->
+          <template v-if="subStep === 2">
+            <button v-if="!subStepSpeaking && subStepScore === null" class="action-btn speak-btn" @click="startSubStepSpeak">
+              <span>🎤</span> 开始跟读
+            </button>
+            <button v-if="subStepSpeaking" class="action-btn speak-btn recording-btn" disabled>
+              <span>🔴</span> 聆听中...
+            </button>
+            <button v-if="subStepFailed" class="action-btn retry-btn" @click="startSubStepSpeak">
+              <span>🔄</span> 再试一次
+            </button>
+            <button v-if="subStepScore !== null" class="action-btn retry-btn" @click="startSubStepSpeak">
+              <span>🔄</span> 再读一遍
+            </button>
+            <button class="action-btn next-btn" @click="nextSubStep">
+              <span>→</span> 下一步
+            </button>
+          </template>
+
+          <!-- Step 3: 听词组 -->
+          <template v-if="subStep === 3">
+            <button class="action-btn listen-btn" @click="playSubStepTTS">
+              <span>🔊</span> 再听一遍
+            </button>
+            <button class="action-btn next-btn" @click="nextSubStep">
+              <span>→</span> 下一步
+            </button>
+          </template>
+
+          <!-- Step 4: 跟读句子 -->
+          <template v-if="subStep === 4">
+            <button v-if="!subStepSpeaking && subStepScore === null" class="action-btn speak-btn" @click="startSubStepSpeak">
+              <span>🎤</span> 跟读句子
+            </button>
+            <button v-if="subStepSpeaking" class="action-btn speak-btn recording-btn" disabled>
+              <span>🔴</span> 聆听中...
+            </button>
+            <button v-if="subStepFailed" class="action-btn retry-btn" @click="startSubStepSpeak">
+              <span>🔄</span> 再试一次
+            </button>
+            <button v-if="subStepScore !== null" class="action-btn retry-btn" @click="startSubStepSpeak">
+              <span>🔄</span> 再读一遍
+            </button>
+            <button class="action-btn next-btn" @click="nextSubStep">
+              <span>→</span> 下一步
+            </button>
+          </template>
+
+          <!-- Step 5: 拼写挑战 -->
+          <template v-if="subStep === 5">
+            <button
+              v-if="spellStepResult === ''"
+              class="action-btn next-btn"
+              :disabled="!canSubmitSpell"
+              @click="submitStepSpelling"
+            >
+              <span>✅</span> 确认拼写
+            </button>
+            <button v-if="spellStepResult !== ''" class="action-btn next-btn" @click="nextSubStep">
+              <span>→</span> {{ currentIndex < words.length - 1 ? '下一个词' : '进入复习' }}
+            </button>
+          </template>
         </div>
       </div>
 
@@ -147,6 +364,8 @@
 
           <!-- 看词选义 -->
           <template v-if="reviewQuestion.type === 'meaning'">
+            <!-- 低年级：显示 emoji 提示 -->
+            <div v-if="showReviewEmoji" class="review-emoji-hint">{{ reviewEmoji }}</div>
             <h2 class="quiz-word">{{ reviewQuestion.prompt }}</h2>
             <p class="quiz-hint">请选择正确的意思</p>
             <div class="options-grid">
@@ -166,6 +385,8 @@
           <!-- 听音选词 -->
           <template v-if="reviewQuestion.type === 'listening'">
             <div class="listen-quiz">
+              <!-- 低年级：显示 emoji 提示 -->
+              <div v-if="showReviewEmoji" class="review-emoji-hint">{{ reviewEmoji }}</div>
               <button
                 class="listen-btn-lg"
                 :class="{ playing: isPlayingAudio }"
@@ -316,18 +537,406 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { petStore, feedPet } from '../stores/pet'
 import { triggerEmotionEvent } from '../stores/emotion'
 import { fetchDailyPlan, completeTaskByType } from '../stores/learning'
 import { fetchWords } from '../stores/words'
+import { authStore } from '../stores/auth'
 import { submitPronounce } from '../stores/session'
+import { WORD_EMOJI_MAP } from '../data/word-emoji'
+import { generateStory } from '../data/story-anchor'
 
 const router = useRouter()
 
 // 模式: word | speak | review | dialogue | result
 const mode = ref<'word' | 'speak' | 'review' | 'dialogue' | 'result'>('word')
+
+// ============================================================
+// 五步渐进学习法（PRD 7.3.4）：word 模式内的子步骤
+// Step 1: 听单词 → Step 2: 跟读单词 → Step 3: 听词组
+// → Step 4: 跟读句子 → Step 5: 拼写挑战
+// ============================================================
+const subStep = ref(1) // 当前子步骤 1-5
+const subStepSpeaking = ref(false) // 子步骤跟读中
+const subStepScore = ref<number | null>(null) // 子步骤跟读评分
+const subStepSpeakTarget = ref('') // 当前跟读目标文本
+const subStepFailed = ref(false) // 子步骤跟读失败标记
+
+// 从例句中提取含目标词的词组
+function extractPhrase(sentence: string, word: string): string {
+  if (!sentence || !word) return `a ${word}`
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  // 匹配目标词及其前后各 1-2 个词
+  const pattern = new RegExp(
+    `((?:[A-Za-z']+\\s+){0,2})${escaped}((?:\\s+[A-Za-z']+){0,2})`,
+    'i',
+  )
+  const match = sentence.match(pattern)
+  if (match) {
+    const phrase = (match[1] + word + match[2]).trim()
+    // 如果太短（只有一个词），给兜底
+    if (phrase.split(/\s+/).length < 2) {
+      return /^[aeiou]/i.test(word) ? `an ${word}` : `a ${word}`
+    }
+    return phrase
+  }
+  return /^[aeiou]/i.test(word) ? `an ${word}` : `a ${word}`
+}
+
+// 当前单词的词组提示
+const phraseHint = computed(() => {
+  const example = currentWord.value?.example || ''
+  const word = currentWord.value?.word || ''
+  return extractPhrase(example, word)
+})
+
+// 故事锚点（基于六大原型 + 主题自动生成完整故事段落）
+const storyAnchor = computed(() => {
+  const w = currentWord.value
+  if (!w) return null
+  const word = w.word || ''
+  const meaning = w.meaning || ''
+  const theme = w.theme || 'animal'
+  const gradeLevel = w.gradeLevel || 3
+  const emoji = WORD_EMOJI_MAP[word.toLowerCase()] || '📖'
+
+  const story = generateStory(word, meaning, theme, emoji, gradeLevel)
+  if (!story) return null
+
+  return {
+    text: story.text,
+    prototype: story.prototype,
+  }
+})
+
+// 当前用户年级（从 authStore 读取，默认 3）
+const userGrade = computed(() => authStore.user?.grade || 3)
+
+// 是否在卡片上显示 emoji 配图（1-4年级显示，5-6不显示）
+const showWordEmoji = computed(() => userGrade.value <= 4)
+
+// 当前单词是否跳过拼写（低段 grade 1-2）
+const skipSpelling = computed(() => {
+  // 1-2 年级跳过完整拼写，改用填空模式（见 Step 5）
+  return false
+})
+
+// 当前子步骤的标题
+const subStepTitle = computed(() => {
+  const titles: Record<number, string> = {
+    1: '听单词',
+    2: '跟读单词',
+    3: '听词组',
+    4: '跟读句子',
+    5: '拼写挑战',
+  }
+  return titles[subStep.value] || ''
+})
+
+// 步骤描述（给孩子的引导语）
+const subStepHint = computed(() => {
+  const word = currentWord.value?.word || ''
+  const hints: Record<number, string> = {
+    1: `先听豆豆读一遍「${word}」吧～`,
+    2: `来，跟豆豆一起读「${word}」！`,
+    3: `看看「${word}」可以和哪些词搭配～`,
+    4: `挑战一下，跟读完整的句子吧！`,
+    5: `试试拼写「${word}」～`,
+  }
+  return hints[subStep.value] || ''
+})
+
+// 推进到下一个子步骤（或下一个词）
+function nextSubStep() {
+  subStepScore.value = null
+  subStepFailed.value = false
+  subStepSpeaking.value = false
+
+  const maxStep = skipSpelling.value ? 4 : 5
+  if (subStep.value < maxStep) {
+    subStep.value++
+    // Step 1 和 Step 3 自动播放 TTS
+    if (subStep.value === 1 || subStep.value === 3) {
+      nextTick(() => playSubStepTTS())
+    }
+  } else {
+    // 当前词学完，进入下一个词
+    markKnown()
+  }
+}
+
+// 子步骤 TTS 朗读
+function playSubStepTTS() {
+  const word = currentWord.value?.word || ''
+  if (subStep.value === 1) {
+    speakText(word) // Step 1: 读单词
+  } else if (subStep.value === 3) {
+    speakText(phraseHint.value) // Step 3: 读词组
+  }
+}
+
+// 子步骤跟读（Step 2 / Step 4）
+function startSubStepSpeak() {
+  const recognition = getRecognition()
+  if (!recognition) {
+    showToast('当前浏览器不支持语音识别，请用 Chrome 试试～')
+    return
+  }
+
+  // 先朗读示范
+  if (subStep.value === 2) {
+    speakText(currentWord.value?.word || '')
+    subStepSpeakTarget.value = (currentWord.value?.word || '').toLowerCase().trim()
+  } else if (subStep.value === 4) {
+    speakText(currentWord.value?.example || '')
+    subStepSpeakTarget.value = (currentWord.value?.example || '').toLowerCase().trim()
+  }
+
+  subStepSpeaking.value = true
+  subStepScore.value = null
+  subStepFailed.value = false
+
+  // 等 TTS 读完再开始录音
+  setTimeout(() => {
+    recognition.lang = 'en-US'
+    recognition.interimResults = false
+    recognition.maxAlternatives = 1
+
+    recognition.onresult = (event: any) => {
+      const transcript = (event.results?.[0]?.[0]?.transcript || '').trim().toLowerCase()
+      const target = subStepSpeakTarget.value
+      subStepSpeaking.value = false
+      subStepFailed.value = false
+
+      if (!transcript) {
+        subStepFailed.value = true
+        return
+      }
+
+      let s: number
+      if (transcript === target) {
+        s = 92 + Math.floor(Math.random() * 9)
+      } else if (transcript.includes(target) || target.includes(transcript)) {
+        s = 72 + Math.floor(Math.random() * 12)
+      } else {
+        s = 45 + Math.floor(Math.random() * 15)
+      }
+      subStepScore.value = s
+
+      // Step 4 句子跟读提交到后端
+      if (subStep.value === 4 && currentWord.value?.wordId && s >= 60) {
+        submitPronounce({
+          wordId: currentWord.value.wordId,
+          score: s,
+          accuracy: Math.min(100, Math.floor(s * 0.9)),
+          fluency: Math.min(100, Math.floor(s * 0.85)),
+          completeness: Math.min(100, Math.floor(s * 0.9)),
+        }).catch(() => {})
+      }
+
+      triggerEmotionEvent(s >= 80 ? 'perfect_score' : 'correct_answer', s / 100, {
+        word: currentWord.value?.word || '',
+      })
+    }
+
+    recognition.onerror = () => {
+      subStepSpeaking.value = false
+      subStepFailed.value = true
+    }
+    recognition.onnomatch = () => {
+      subStepSpeaking.value = false
+      subStepFailed.value = true
+    }
+
+    try {
+      recognition.start()
+    } catch {
+      subStepSpeaking.value = false
+      subStepFailed.value = true
+    }
+  }, subStep.value === 2 ? 1200 : 2500) // 句子需要更多时间朗读
+}
+
+// ============================================================
+// 拼写挑战 — 年级分级填空系统
+// ============================================================
+
+interface SpellSegment {
+  text: string
+  isGap: boolean
+  gapIndex?: number
+  answer?: string
+  userInput: string
+}
+
+// 拼写模式：gap（填空，1-3年级）或 full（完整拼写，4+年级）
+const spellMode = computed<'gap' | 'full'>(() => {
+  return userGrade.value <= 3 ? 'gap' : 'full'
+})
+
+// 拼写提示文字
+const spellHintText = computed(() => {
+  const g = userGrade.value
+  if (g === 1) return '（填入首字母）'
+  if (g === 2) return '（填入元音字母 a e i o u）'
+  if (g === 3) return '（填入缺少的字母）'
+  return ''
+})
+
+// 生成拼写填空 segments（结构由 computed 生成，userInput 由 ref 数组管理）
+const spellGapInputs = ref<string[]>([])
+
+const spellSegments = computed<SpellSegment[]>(() => {
+  const word = (currentWord.value?.word || '').toLowerCase()
+  if (spellMode.value === 'full' || !word) return []
+
+  const g = userGrade.value
+  const chars = word.split('')
+  const vowels = new Set(['a', 'e', 'i', 'o', 'u'])
+
+  const gapPositions = new Set<number>()
+
+  if (g === 1) {
+    gapPositions.add(0)
+  } else if (g === 2) {
+    chars.forEach((ch, i) => { if (vowels.has(ch)) gapPositions.add(i) })
+  } else if (g === 3) {
+    gapPositions.add(0)
+    chars.forEach((ch, i) => { if (vowels.has(ch) && i > 0) gapPositions.add(i) })
+  }
+
+  // 确保 inputs 数组长度匹配
+  const gapCount = gapPositions.size
+  if (spellGapInputs.value.length !== gapCount) {
+    spellGapInputs.value = new Array(gapCount).fill('')
+  }
+
+  const segments: SpellSegment[] = []
+  let gapIdx = 0
+  let currentText = ''
+
+  chars.forEach((ch, i) => {
+    if (gapPositions.has(i)) {
+      if (currentText) {
+        segments.push({ text: currentText, isGap: false, userInput: '' })
+        currentText = ''
+      }
+      segments.push({
+        text: '',
+        isGap: true,
+        gapIndex: gapIdx,
+        answer: ch,
+        userInput: spellGapInputs.value[gapIdx] || '',
+      })
+      gapIdx++
+    } else {
+      currentText += ch
+    }
+  })
+  if (currentText) {
+    segments.push({ text: currentText, isGap: false, userInput: '' })
+  }
+
+  return segments
+})
+
+const currentGapIndex = ref(0)
+const spellStepResult = ref<'correct' | 'wrong' | ''>('')
+const spellStepAnswer = ref('') // 完整拼写模式用
+
+// 是否可以提交拼写
+const canSubmitSpell = computed(() => {
+  if (spellMode.value === 'full') {
+    return spellStepAnswer.value.trim() !== ''
+  }
+  return spellGapInputs.value.length > 0 && spellGapInputs.value.every(v => v !== '')
+})
+
+// 点击空格，设置当前编辑位
+function focusGap(gapIndex: number) {
+  currentGapIndex.value = gapIndex
+}
+
+// 点击字母块，填入当前空格
+function tapLetter(letter: string) {
+  if (currentGapIndex.value < spellGapInputs.value.length) {
+    spellGapInputs.value[currentGapIndex.value] = letter
+    // 自动跳到下一个空
+    const nextEmpty = spellGapInputs.value.findIndex((v, i) => i > currentGapIndex.value && v === '')
+    if (nextEmpty >= 0) {
+      currentGapIndex.value = nextEmpty
+    }
+  }
+}
+
+// 删除当前空格的字母
+function tapDelete() {
+  if (currentGapIndex.value < spellGapInputs.value.length) {
+    spellGapInputs.value[currentGapIndex.value] = ''
+    // 跳到前一个空
+    if (currentGapIndex.value > 0) {
+      currentGapIndex.value--
+    }
+  }
+}
+
+// 检查某个字母是否已使用（避免重复点）
+function isLetterUsed(letter: string): boolean {
+  return spellGapInputs.value.some(v => v === letter)
+}
+
+// 拼写挑战提交（Step 5）
+function submitStepSpelling() {
+  if (spellMode.value === 'gap') {
+    // 填空模式：比较所有 gap
+    const gaps = spellSegments.value.filter(s => s.isGap)
+    const allCorrect = gaps.every((s, i) =>
+      spellGapInputs.value[i]?.toLowerCase() === s.answer?.toLowerCase()
+    )
+    spellStepResult.value = allCorrect ? 'correct' : 'wrong'
+    if (allCorrect) {
+      feedPet(5)
+      triggerEmotionEvent('review_correct', 1, { word: currentWord.value?.word || '' })
+    } else {
+      triggerEmotionEvent('review_forgot', 0.3, { word: currentWord.value?.word || '' })
+    }
+  } else {
+    // 完整拼写模式
+    const input = spellStepAnswer.value.trim()
+    if (!input) return
+    const isCorrect =
+      input.toLowerCase() === (currentWord.value?.word || '').toLowerCase()
+    spellStepResult.value = isCorrect ? 'correct' : 'wrong'
+    if (isCorrect) {
+      feedPet(5)
+      triggerEmotionEvent('review_correct', 1, { word: currentWord.value?.word || '' })
+    } else {
+      triggerEmotionEvent('review_forgot', 0.3, { word: currentWord.value?.word || '' })
+    }
+  }
+}
+
+// 评分辅助函数（用于子步骤跟读反馈）
+function scoreLevelClass(s: number): string {
+  if (s >= 90) return 'excellent'
+  if (s >= 70) return 'good'
+  if (s >= 50) return 'fair'
+  return 'poor'
+}
+function scoreEmoji(s: number): string {
+  if (s >= 90) return '🌟'
+  if (s >= 70) return '👍'
+  if (s >= 50) return '💪'
+  return '🤗'
+}
+function scoreFeedback(s: number): string {
+  if (s >= 90) return '太棒了！发音很标准！'
+  if (s >= 70) return '不错哦，继续加油！'
+  if (s >= 50) return '还需练习，再来一次～'
+  return '没关系，慢慢来！'
+}
 
 interface LearnWord {
   wordId?: string
@@ -338,6 +947,8 @@ interface LearnWord {
   exampleCn?: string
   emoji?: string
   bg?: string
+  theme?: string
+  gradeLevel?: number
   _isReview?: boolean
 }
 
@@ -354,6 +965,12 @@ const THEME_STYLES: Record<string, { emoji: string; bg: string }> = {
   family: { emoji: '👨‍👩‍👧', bg: '#fff8e0' },
   transport: { emoji: '🚌', bg: '#e8f0ff' },
   nature: { emoji: '🌿', bg: '#e0ffe8' },
+  clothes: { emoji: '👗', bg: '#ffe8f8' },
+  music: { emoji: '🎵', bg: '#f8e8ff' },
+  time: { emoji: '⏰', bg: '#fff8e8' },
+  emotion: { emoji: '😊', bg: '#ffe8e8' },
+  shape: { emoji: '🔺', bg: '#e8fff8' },
+  number: { emoji: '🔢', bg: '#e8f8f0' },
 }
 
 function themeStyle(theme?: string | null) {
@@ -384,8 +1001,8 @@ async function loadTodayWords() {
             word: w.word,
             phonetic: w.phonetic || undefined,
             meaning: w.translation,
-            example: `Let's learn the word "${w.word}"!`,
-            exampleCn: `我们来学单词"${w.translation}"吧！`,
+            example: w.sentence || `Let us learn the word "${w.word}"!`,
+            exampleCn: w.sentenceCn || `我们来学单词"${w.translation}"吧！`,
             emoji: style.emoji,
             bg: style.bg,
           }
@@ -401,8 +1018,8 @@ async function loadTodayWords() {
           word: r.word,
           phonetic: r.phonetic || undefined,
           meaning: r.translation,
-          example: `Review: do you remember "${r.word}"?`,
-          exampleCn: `复习：还记得"${r.translation}"吗？`,
+          example: r.sentence || `Review: do you remember "${r.word}"?`,
+          exampleCn: r.sentenceCn || `复习：还记得"${r.translation}"吗？`,
           emoji: '🔄',
           bg: '#fff8e0',
           _isReview: true,
@@ -414,8 +1031,8 @@ async function loadTodayWords() {
             word: w.word,
             phonetic: w.phonetic || undefined,
             meaning: w.translation,
-            example: `Let's learn the word "${w.word}"!`,
-            exampleCn: `我们来学单词"${w.translation}"吧！`,
+            example: w.sentence || `Let us learn the word "${w.word}"!`,
+            exampleCn: w.sentenceCn || `我们来学单词"${w.translation}"吧！`,
             emoji: style.emoji,
             bg: style.bg,
           }
@@ -445,6 +1062,8 @@ async function loadTodayWords() {
 
 onMounted(() => {
   loadTodayWords()
+  // 学习开始，触发情感事件
+  triggerEmotionEvent('session_start', 0.6, { action: 'start_learning' })
 })
 
 const currentIndex = ref(0)
@@ -452,6 +1071,14 @@ const currentWord = computed(() => words.value[currentIndex.value] || null)
 const wordEmoji = computed(() => currentWord.value?.emoji || '📖')
 const wordBg = computed(() => currentWord.value?.bg || '#f0e6ff')
 const progressPct = computed(() => (currentIndex.value / words.value.length) * 100)
+
+// 进入 Step 5 或切换单词时重置填空输入
+watch([subStep, currentIndex], () => {
+  if (subStep.value === 5) {
+    spellGapInputs.value = []
+    currentGapIndex.value = 0
+  }
+})
 
 // 跟读状态
 const isRecording = ref(false)
@@ -527,6 +1154,16 @@ const quizTypeLabel = computed(() => {
     spelling: '拼写挑战',
   }
   return map[reviewQuestion.value.type] || ''
+})
+
+// 低年级复习时显示 emoji 提示
+const showReviewEmoji = computed(() => userGrade.value <= 3)
+
+const reviewEmoji = computed(() => {
+  if (!reviewQuestion.value) return '📖'
+  // 从当前复习题 prompt（英文单词）查对应 emoji
+  const word = reviewQuestion.value.prompt?.toLowerCase()
+  return WORD_EMOJI_MAP[word] || '📖'
 })
 
 const isLastReview = computed(() => reviewIndex.value >= reviewQuestions.value.length - 1)
@@ -683,8 +1320,17 @@ function afterSpeak() {
 function markKnown() {
   triggerEmotionEvent('correct_answer', 0.8, { word: currentWord.value?.word || '' })
   feedPet(5)
+  // 重置五步子步骤
+  subStep.value = 1
+  subStepScore.value = null
+  subStepFailed.value = false
+  subStepSpeaking.value = false
+  spellStepAnswer.value = ''
+  spellStepResult.value = ''
   if (currentIndex.value < words.value.length - 1) {
     currentIndex.value++
+    // 进入新词时自动播放 Step 1 TTS
+    nextTick(() => playSubStepTTS())
   } else {
     startReview()
   }
@@ -770,6 +1416,8 @@ function showResult() {
   feedPet(starsEarned.value * 5)
   // 真实学习完成后，才把首页对应的每日任务标记为完成（由学习行为驱动）
   completeTaskByType(['word', 'speak', 'listen'], Math.max(3, starsEarned.value))
+  // 学习完成，触发情感事件
+  triggerEmotionEvent('session_complete', 0.9, { stars: starsEarned.value, correct: correctCount.value })
 }
 
 // ============================================================
@@ -890,6 +1538,16 @@ function handleBack() {
     mode.value = 'word'
     return
   }
+  // word 模式：如果在子步骤 > 1，退回上一步；否则返回首页
+  if (mode.value === 'word' && subStep.value > 1) {
+    subStep.value--
+    subStepScore.value = null
+    subStepFailed.value = false
+    subStepSpeaking.value = false
+    spellStepAnswer.value = ''
+    spellStepResult.value = ''
+    return
+  }
   router.push('/')
 }
 
@@ -899,9 +1557,17 @@ function goHome() {
 
 function startNew() {
   currentIndex.value = 0
+  subStep.value = 1
+  subStepScore.value = null
+  subStepFailed.value = false
+  subStepSpeaking.value = false
+  spellStepAnswer.value = ''
+  spellStepResult.value = ''
   mode.value = 'word'
   // 刷新单词
   words.value = shuffle(words.value)
+  // 自动播放第一个词的 TTS
+  nextTick(() => playSubStepTTS())
 }
 
 function showToast(msg: string) {
@@ -1010,7 +1676,7 @@ function showToast(msg: string) {
 .progress-text {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-light);
+  color: var(--text-on-light-muted);
   min-width: 48px;
   text-align: right;
 }
@@ -1021,6 +1687,371 @@ function showToast(msg: string) {
   display: flex;
   flex-direction: column;
   align-items: center;
+
+/* ============================================================
+   五步子步骤指示器
+   ============================================================ */
+.step-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.step-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #d4cff0;
+  transition: all 0.3s;
+}
+
+.step-dot.active {
+  width: 12px;
+  height: 12px;
+  background: var(--primary, #6c5ce7);
+  box-shadow: 0 0 8px rgba(108, 92, 231, 0.4);
+}
+
+.step-dot.done {
+  background: #a29bfe;
+}
+
+.step-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary, #6c5ce7);
+  margin-left: 6px;
+}
+
+.step-hint {
+  font-size: 15px;
+  color: var(--text-light, #888);
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+/* 子步骤评分 */
+.substep-score {
+  margin: 0 24px 16px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.substep-score.excellent {
+  background: #e8ffe8;
+  color: #2d8a2d;
+}
+
+.substep-score.good {
+  background: #e8f4ff;
+  color: #2d6a8a;
+}
+
+.substep-score.fair {
+  background: #fff8e0;
+  color: #8a7a2d;
+}
+
+.substep-score.poor {
+  background: #ffe8e8;
+  color: #8a5a5a;
+}
+
+.score-icon {
+  font-size: 20px;
+}
+
+/* 词组卡片 */
+.phrase-card .phrase-illustration {
+  height: 120px;
+}
+
+.phrase-icon {
+  font-size: 48px;
+}
+
+.phrase-text {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--primary, #6c5ce7);
+  font-style: italic;
+}
+
+/* 拼写卡片 */
+.spell-card .spell-prompt {
+  font-size: 20px;
+  color: var(--text, #333);
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.spell-input-wrap {
+  padding: 0 24px 16px;
+}
+
+.step-spell {
+  width: 100%;
+  padding: 14px 18px;
+  font-size: 20px;
+  border: 2px solid #c4b5e8;
+  border-radius: 12px;
+  text-align: center;
+  outline: none;
+  color: #4a3685;
+  background: #f5f0ff;
+  transition: border-color 0.2s;
+}
+
+.step-spell::placeholder {
+  color: #b0a0d4;
+  font-size: 16px;
+}
+
+.step-spell:focus {
+  border-color: #8b6fcf;
+  background: #ede4ff;
+}
+
+.step-spell.correct {
+  border-color: #2d8a2d;
+  background: #e8ffe8;
+}
+
+.step-spell.wrong {
+  border-color: #e74c3c;
+  background: #ffe8e8;
+}
+
+.spell-feedback {
+  padding: 0 24px 12px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.spell-feedback.correct {
+  color: #2d8a2d;
+}
+
+.spell-feedback.wrong {
+  color: #e74c3c;
+}
+
+/* 录音中按钮 */
+.recording-btn {
+  background: #ffe0e0 !important;
+  color: #e74c3c !important;
+  animation: pulse-rec 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-rec {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* 故事锚点 */
+.story-anchor-box {
+  margin: 0 24px 16px;
+  padding: 16px;
+  background: linear-gradient(135deg, #fef9e7, #fdf3e0);
+  border-radius: 14px;
+  border-left: 4px solid #f0b27a;
+  box-shadow: 0 2px 8px rgba(240, 178, 122, 0.12);
+}
+
+.story-anchor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+  font-weight: 700;
+  color: #d68910;
+  margin-bottom: 10px;
+}
+
+.story-prototype-tag {
+  font-size: 11px;
+  font-weight: 500;
+  color: #b7955b;
+  background: rgba(240, 178, 122, 0.15);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.story-anchor-text {
+  font-size: 14px;
+  color: #5d4e37;
+  line-height: 1.8;
+  margin: 0;
+  letter-spacing: 0.01em;
+}
+
+/* 复习模式 emoji 提示 */
+.review-emoji-hint {
+  font-size: 48px;
+  text-align: center;
+  margin-bottom: 8px;
+  animation: float 3s ease-in-out infinite;
+}
+
+/* ============ 拼写填空（Step 5 年级分级） ============ */
+.spell-hint-text {
+  font-size: 13px;
+  color: var(--text-on-light-muted);
+  font-weight: 400;
+}
+
+.spell-gap-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  padding: 20px 16px;
+  flex-wrap: wrap;
+}
+
+.spell-char {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text-on-light);
+  line-height: 1;
+}
+
+.spell-gap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 52px;
+  border: 3px dashed #d0c8e8;
+  border-radius: 10px;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-on-light);
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #faf8ff;
+}
+
+.spell-gap.active {
+  border-color: var(--primary);
+  border-style: solid;
+  background: #f0ecff;
+  animation: gap-pulse 1s ease-in-out infinite;
+}
+
+.spell-gap.filled {
+  border-style: solid;
+  border-color: #c4b8f0;
+  background: #f5f0ff;
+  color: var(--primary);
+}
+
+.spell-gap.gap-correct {
+  border-color: #00b894;
+  background: #e6fff8;
+  color: #00896c;
+}
+
+.spell-gap.gap-wrong {
+  border-color: #e17055;
+  background: #ffeaea;
+  color: #c0392b;
+}
+
+@keyframes gap-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(108, 92, 231, 0.3); }
+  50% { box-shadow: 0 0 0 8px rgba(108, 92, 231, 0); }
+}
+
+/* ============ 悬浮字母键盘 ============ */
+.letter-keyboard {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid #eee;
+  padding: 12px 16px 24px;
+  z-index: 100;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.06);
+}
+
+.letter-row {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.letter-vowels {
+  margin-bottom: 8px;
+}
+
+.letter-key {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: none;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.letter-vowel {
+  background: #fff0e8;
+  color: #e8793f;
+  border: 2px solid #fdd9c4;
+}
+
+.letter-vowel:hover:not(:disabled) {
+  background: #ffe0d0;
+  transform: scale(1.08);
+}
+
+.letter-consonant {
+  background: #f0f0f8;
+  color: #5a5a7a;
+  border: 2px solid #e0e0f0;
+}
+
+.letter-consonant:hover:not(:disabled) {
+  background: #e4e4f0;
+  transform: scale(1.08);
+}
+
+.letter-key:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.letter-action {
+  background: #f5f5f5;
+  color: #888;
+  font-size: 16px;
+  width: 56px;
+  border: 2px solid #e8e8e8;
+}
+
+.letter-action:hover {
+  background: #eee;
+}
 
 .review-badge {
   background: #fff3cd;
@@ -1056,6 +2087,14 @@ function showToast(msg: string) {
   animation: float 3s ease-in-out infinite;
 }
 
+/* 单词卡片顶部大 emoji 配图（1-4年级显示） */
+.word-emoji-big {
+  font-size: 64px;
+  text-align: center;
+  padding: 24px 0 8px;
+  animation: float 3s ease-in-out infinite;
+}
+
 @keyframes float {
   0%,
   100% {
@@ -1080,14 +2119,14 @@ function showToast(msg: string) {
 
 .word-phonetic {
   font-size: 14px;
-  color: var(--text-muted);
+  color: var(--text-on-light-muted);
   margin-bottom: 8px;
 }
 
 .word-meaning {
   font-size: 20px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--text-on-light);
 }
 
 .example-box {
@@ -1236,7 +2275,7 @@ function showToast(msg: string) {
 
 .recording-hint {
   font-size: 15px;
-  color: var(--text-light);
+  color: var(--text-on-light-muted);
 }
 
 .audio-wave {
@@ -1332,7 +2371,7 @@ function showToast(msg: string) {
 .score-label {
   font-size: 15px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--text-on-light);
 }
 
 .score-detail {
@@ -1429,8 +2468,8 @@ function showToast(msg: string) {
   display: inline-block;
   padding: 4px 14px;
   border-radius: 20px;
-  background: var(--bg);
-  color: var(--primary);
+  background: #f0ecff;
+  color: #6c5ce7;
   font-size: 13px;
   font-weight: 600;
   margin-bottom: 16px;
@@ -1439,13 +2478,13 @@ function showToast(msg: string) {
 .quiz-word {
   font-size: 36px;
   font-weight: 700;
-  color: var(--text);
+  color: #333;
   margin-bottom: 8px;
 }
 
 .quiz-hint {
   font-size: 14px;
-  color: var(--text-muted);
+  color: #888;
   margin-bottom: 20px;
 }
 
@@ -1460,6 +2499,7 @@ function showToast(msg: string) {
   border-radius: 12px;
   border: 2px solid var(--border);
   background: white;
+  color: #333;
   font-size: 15px;
   font-weight: 500;
   cursor: pointer;
@@ -1616,13 +2656,13 @@ function showToast(msg: string) {
 .dodo-sentence {
   font-size: 17px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--text-on-light);
   line-height: 1.5;
 }
 
 .dodo-cn {
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--text-on-light-muted);
   margin-top: 6px;
 }
 
@@ -1768,7 +2808,7 @@ function showToast(msg: string) {
 
 .stat-label {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-on-light-muted);
 }
 
 .dodo-cheer {
@@ -1794,7 +2834,7 @@ function showToast(msg: string) {
 .cheer-bubble {
   font-size: 14px;
   line-height: 1.6;
-  color: var(--text);
+  color: var(--text-on-light);
 }
 
 .result-actions {
@@ -1830,7 +2870,7 @@ function showToast(msg: string) {
   border-radius: 14px;
   border: 2px solid var(--border);
   background: white;
-  color: var(--text);
+  color: var(--text-on-light);
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;

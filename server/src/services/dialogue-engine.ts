@@ -286,63 +286,291 @@ function validateAnimation(a: string): DodoReply['animation'] {
 }
 
 // ============================================================
-// 降级方案：硬编码话术（LLM 不可用时）
+// 降级方案：丰富话术库（LLM 不可用时）
+//
+// 每个阶段 6-8 条话术，按英语使用率分三档：
+//   high: >50% — 鼓励进阶
+//   mid:  20-50% — 继续引导
+//   low:  <20% — 温和鼓励
 // ============================================================
+
+interface FallbackTemplate {
+  text: string
+  translation: string
+  expression: DodoReply['expression']
+  animation: DodoReply['animation']
+  followUp?: string
+}
+
+function pickFallback(pool: FallbackTemplate[]): FallbackTemplate {
+  return pool[Math.floor(Math.random() * pool.length)]
+}
 
 function generateFallbackReply(
   state: DialogueState,
-  _message: string,
+  message: string,
   englishRatio: number,
 ): DodoReply {
+  const tier = englishRatio > 0.5 ? 'high' : englishRatio > 0.2 ? 'mid' : 'low'
+  const w0 = state.targetWords[0] || 'it'
+  const w1 = state.targetWords[1] || w0
+  const topic = state.topic
+  const sentence = state.targetSentence
+
   switch (state.stage) {
-    case 'warmup':
-      return {
-        text: "Hello my friend! I'm so happy to see you! How are you today? 😊",
-        translation: '你好朋友！见到你好开心！今天怎么样？',
-        expression: 'happy',
-        animation: 'wave',
-        followUp: 'What did you do today?',
-        stage: 'warmup',
+    // ============================================================
+    // 暖场阶段
+    // ============================================================
+    case 'warmup': {
+      const pool: FallbackTemplate[] = [
+        {
+          text: "Hello my friend! I'm so happy to see you! How are you today? 😊",
+          translation: '你好朋友！见到你好开心！今天感觉怎么样？',
+          expression: 'happy', animation: 'wave',
+          followUp: 'What did you do today?',
+        },
+        {
+          text: "Hi there! Did you have a good day? I'm so excited to chat with you! 🌟",
+          translation: '嗨！今天过得开心吗？跟你聊天我好兴奋！',
+          expression: 'excited', animation: 'bounce',
+          followUp: 'Tell me something fun about your day!',
+        },
+        {
+          text: "Welcome back! I missed you! How are you feeling right now? 💚",
+          translation: '欢迎回来！我想你了！你现在感觉怎么样？',
+          expression: 'happy', animation: 'wave',
+          followUp: 'Are you feeling happy or tired?',
+        },
+        {
+          text: "Hey buddy! Ready for some English fun today? Let's warm up! 🎉",
+          translation: '嘿小伙伴！准备好今天的英语乐趣了吗？来暖个场吧！',
+          expression: 'excited', animation: 'sparkle',
+          followUp: 'What makes you happy today?',
+        },
+        {
+          text: "Good to see you! Let's start with something easy — how are you? ☀️",
+          translation: '见到你真好！咱们从简单的开始——你好吗？',
+          expression: 'encouraging', animation: 'nod',
+          followUp: 'Can you say "I am..."?',
+        },
+        {
+          text: "Oh! My favorite time of day — chatting with you! How's everything? 🦕",
+          translation: '哦！我一天中最喜欢的时刻——和你聊天！一切都好吗？',
+          expression: 'happy', animation: 'bounce',
+          followUp: 'Did anything fun happen today?',
+        },
+      ]
+      const tpl = pickFallback(pool)
+      return { ...tpl, stage: 'warmup' }
+    }
+
+    // ============================================================
+    // 话题阶段
+    // ============================================================
+    case 'topic': {
+      if (tier === 'low') {
+        const pool: FallbackTemplate[] = [
+          {
+            text: `Let's talk about ${topic}! It's okay to use Chinese — just try one English word like "${w0}"! 😊`,
+            translation: `我们聊聊${topic}吧！可以说中文，试着说一个英文词就好，比如"${w0}"！`,
+            expression: 'encouraging', animation: 'nod',
+            followUp: `Can you say "${w0}"?`,
+          },
+          {
+            text: `Today's topic is ${topic}! Don't worry, even one word is amazing! Try "${w0}"! 🌱`,
+            translation: `今天的话题是${topic}！别担心，说一个词就很棒了！试试"${w0}"！`,
+            expression: 'encouraging', animation: 'wave',
+            followUp: `What's your favorite ${w0}?`,
+          },
+          {
+            text: `I love ${topic}! Do you know any English words about ${topic}? Let me help you! 💪`,
+            translation: `我喜欢${topic}！你知道关于${topic}的英语单词吗？我来帮你！`,
+            expression: 'encouraging', animation: 'nod',
+            followUp: `Try saying "${w0}" — I believe in you!`,
+          },
+        ]
+        const tpl = pickFallback(pool)
+        return { ...tpl, stage: 'topic' }
       }
 
-    case 'topic':
-      if (englishRatio < 0.2) {
-        return {
-          text: `Let's talk about ${state.topic}! Try saying a little in English — even one word is great! 😊`,
-          translation: `我们聊聊${state.topic}吧！试着用英语说一点点，一个词也很棒！`,
-          expression: 'encouraging',
-          animation: 'nod',
-          followUp: `Can you say "${state.targetWords[0]}"?`,
-          stage: 'topic',
-        }
-      }
-      return {
-        text: `Wow, great English! Let's talk more about ${state.topic}!`,
-        translation: `哇，英语说得真好！我们多聊聊${state.topic}！`,
-        expression: 'excited',
-        animation: 'sparkle',
-        followUp: `Can you make a sentence with "${state.targetWords[0]}"?`,
-        stage: 'topic',
-      }
-
-    case 'practice':
-      return {
-        text: `Now let's practice! Try saying: "${state.targetSentence}"`,
-        translation: `现在来练习！试试说："${state.targetSentence}"`,
-        expression: 'encouraging',
-        animation: 'wave',
-        followUp: 'You can do it!',
-        stage: 'practice',
+      if (tier === 'mid') {
+        const pool: FallbackTemplate[] = [
+          {
+            text: `Great! You know some English about ${topic}! Can you tell me more? I love "${w0}"! 💬`,
+            translation: `太棒了！你知道${topic}的英语！能多说一点吗？我喜欢"${w0}"！`,
+            expression: 'excited', animation: 'sparkle',
+            followUp: `What else do you know about ${topic}?`,
+          },
+          {
+            text: `Nice! You're getting better! Let's explore ${topic} together. What do you like? 🎯`,
+            translation: `不错！你越来越棒了！我们一起探索${topic}吧。你喜欢什么？`,
+            expression: 'happy', animation: 'bounce',
+            followUp: `Do you like ${w0} or ${w1}?`,
+          },
+          {
+            text: `Cool! You used English! Let's keep talking about ${topic}. Can you use "${w0}" in a sentence? 🌟`,
+            translation: `酷！你用了英语！我们继续聊${topic}。你能用"${w0}"造个句子吗？`,
+            expression: 'proud', animation: 'sparkle',
+            followUp: `Try: "I like ${w0}!"`,
+          },
+        ]
+        const tpl = pickFallback(pool)
+        return { ...tpl, stage: 'topic' }
       }
 
-    case 'wrapup':
-      return {
-        text: 'That was so fun! You did great today! See you next time! 💝',
-        translation: '太有趣了！你今天表现很棒！下次见！',
-        expression: 'proud',
-        animation: 'sparkle',
-        stage: 'wrapup',
+      // high
+      const pool: FallbackTemplate[] = [
+        {
+          text: `Wow! Your English is so good! I love talking about ${topic} with you! Tell me everything! 🌈`,
+          translation: `哇！你的英语太好了！跟你聊${topic}真开心！全都告诉我吧！`,
+          expression: 'excited', animation: 'sparkle',
+          followUp: `Can you describe ${w0} in English?`,
+        },
+        {
+          text: `Amazing English! You sound like a pro! Let's dive deeper into ${topic}! What's your favorite thing? 🚀`,
+          translation: `英语太棒了！听起来像个小专家！我们深入聊聊${topic}！你最喜欢什么？`,
+          expression: 'excited', animation: 'bounce',
+          followUp: `Why do you like it? Tell me in English!`,
+        },
+        {
+          text: `You're a star! ⭐ Your English makes me so proud! Let's explore more about ${topic} together!`,
+          translation: `你是个明星！⭐ 你的英语让我好骄傲！我们一起探索更多${topic}吧！`,
+          expression: 'proud', animation: 'clap',
+          followUp: `Can you teach me a new word about ${topic}?`,
+        },
+      ]
+      const tpl = pickFallback(pool)
+      return { ...tpl, stage: 'topic' }
+    }
+
+    // ============================================================
+    // 练习阶段
+    // ============================================================
+    case 'practice': {
+      if (tier === 'low') {
+        const pool: FallbackTemplate[] = [
+          {
+            text: `Let's practice together! Just repeat after me: "${sentence}" — I'll help you! 🤗`,
+            translation: `我们一起练习！跟着我说："${sentence}"——我来帮你！`,
+            expression: 'encouraging', animation: 'nod',
+            followUp: 'Ready? Repeat after me!',
+          },
+          {
+            text: `Practice time! Don't be shy — let's try "${sentence}". I'll say it first! 🎤`,
+            translation: `练习时间！别害羞——试试"${sentence}"。我先说一遍！`,
+            expression: 'encouraging', animation: 'wave',
+            followUp: 'Your turn! You can do it!',
+          },
+          {
+            text: `It's practice time! Even a little try counts. Can you say one word from "${sentence}"? 🌱`,
+            translation: `练习时间到！试一点点也算数。你能说"${sentence}"里的一个词吗？`,
+            expression: 'thinking', animation: 'nod',
+            followUp: `How about just saying "${w0}"?`,
+          },
+        ]
+        const tpl = pickFallback(pool)
+        return { ...tpl, stage: 'practice' }
       }
+
+      if (tier === 'mid') {
+        const pool: FallbackTemplate[] = [
+          {
+            text: `Good job! Now let's practice the sentence: "${sentence}". Try making your own! 🎯`,
+            translation: `做得好！现在练习这个句子："${sentence}"。试着造你自己的！`,
+            expression: 'encouraging', animation: 'sparkle',
+            followUp: 'Can you change one word and make a new sentence?',
+          },
+          {
+            text: `You're doing great! Let's practice "${sentence}" with different words. Use "${w0}" or "${w1}"! 💪`,
+            translation: `你做得很棒！我们用不同的词练习"${sentence}"。用"${w0}"或"${w1}"！`,
+            expression: 'happy', animation: 'bounce',
+            followUp: `Try: "${sentence.replace('___', w0)}"`,
+          },
+          {
+            text: `Practice makes perfect! Let's say "${sentence}" together — then you try alone! Ready? 🔥`,
+            translation: `熟能生巧！我们一起说"${sentence}"——然后你自己试试！准备好了吗？`,
+            expression: 'encouraging', animation: 'wave',
+            followUp: '3, 2, 1, go!',
+          },
+        ]
+        const tpl = pickFallback(pool)
+        return { ...tpl, stage: 'practice' }
+      }
+
+      // high
+      const pool: FallbackTemplate[] = [
+        {
+          text: `Excellent! You're ready for a challenge! Make 3 sentences with "${w0}", "${w1}", and "${sentence.split('___')[0].trim()}" 🏆`,
+          translation: `太棒了！你准备好挑战了！用"${w0}"、"${w1}"造3个句子！`,
+          expression: 'excited', animation: 'sparkle',
+          followUp: 'I know you can do it!',
+        },
+        {
+          text: `Super impressive! Let's level up — can you ask ME a question using "${w0}"? I'll answer! 🎮`,
+          translation: `超级厉害！升级一下——你能用"${w0}"问我一个问题吗？我来回答！`,
+          expression: 'excited', animation: 'bounce',
+          followUp: 'Ask me anything!',
+        },
+        {
+          text: `You're a natural! 🌟 Let's have a mini conversation — you start with "${sentence.replace('___', w0)}", and I'll reply!`,
+          translation: `你天生就是学英语的料！🌟 来场迷你对话——你用"${sentence.replace('___', w0)}"开头，我回复！`,
+          expression: 'proud', animation: 'clap',
+          followUp: 'Your turn first!',
+        },
+      ]
+      const tpl = pickFallback(pool)
+      return { ...tpl, stage: 'practice' }
+    }
+
+    // ============================================================
+    // 收尾阶段
+    // ============================================================
+    case 'wrapup': {
+      const pool: FallbackTemplate[] = [
+        {
+          text: "That was so much fun! You did amazing today! I'm so proud of you! See you next time! 💝",
+          translation: '太有趣了！你今天表现超棒！我为你骄傲！下次见！',
+          expression: 'proud', animation: 'sparkle',
+        },
+        {
+          text: "Time flies when we're having fun! You learned so much today! Come back soon, okay? 🌟",
+          translation: '开心的时间过得真快！你今天学了好多！快点回来哦？',
+          expression: 'happy', animation: 'wave',
+        },
+        {
+          text: "What a wonderful chat! You're getting better every day! Big hug! See you tomorrow! 🤗🦕",
+          translation: '多棒的聊天啊！你每天都在进步！大大拥抱！明天见！',
+          expression: 'excited', animation: 'bounce',
+        },
+        {
+          text: "Great job today! Remember the words we practiced — they're your superpowers now! Bye-bye! ⚡",
+          translation: '今天做得好！记住我们练习的词——它们现在是你的超能力了！拜拜！',
+          expression: 'encouraging', animation: 'sparkle',
+        },
+        {
+          text: "I had the best time chatting with you! You're a star! Keep shining! See you soon! ⭐💚",
+          translation: '跟你聊天是我最开心的时光！你是颗星星！继续发光！再见！',
+          expression: 'proud', animation: 'clap',
+        },
+        {
+          text: "All done! You worked so hard today! Give yourself a round of applause! 👏 See you next adventure!",
+          translation: '完成啦！今天你很努力！给自己鼓鼓掌！👏 下次冒险见！',
+          expression: 'proud', animation: 'clap',
+        },
+        {
+          text: "That's a wrap! 🎬 You used so many English words today! I can't wait for our next chat! 💖",
+          translation: '收工啦！🎬 你今天用了好多英语单词！我等不及下次聊天了！',
+          expression: 'excited', animation: 'sparkle',
+        },
+        {
+          text: "Mission accomplished! 🏅 You leveled up your English today! Sweet dreams and see you soon!",
+          translation: '任务完成！🏅 你今天英语升级了！做个好梦，很快再见！',
+          expression: 'happy', animation: 'wave',
+        },
+      ]
+      const tpl = pickFallback(pool)
+      return { ...tpl, stage: 'wrapup' }
+    }
   }
 }
 

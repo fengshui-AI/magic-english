@@ -119,7 +119,7 @@ export const learningApi = {
   }): Promise<{ session: LearningSession }> {
     return apiRequest('/learning/session/end', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: data,
     })
   },
 
@@ -127,7 +127,7 @@ export const learningApi = {
   pronounce(data: PronounceRequest): Promise<PronounceResponse> {
     return apiRequest('/learning/pronounce', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: data,
     })
   },
 
@@ -167,7 +167,7 @@ export const learningApi = {
   }> {
     return apiRequest(`/learning/review/${wordId}`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: data,
     })
   },
 

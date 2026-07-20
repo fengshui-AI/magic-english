@@ -9,6 +9,8 @@ export interface WordItem {
   gradeLevel?: number | null
   theme?: string | null
   storyAnchor?: string | null
+  sentence?: string | null
+  sentenceCn?: string | null
   imageUrl?: string | null
   audioUrl?: string | null
   createdAt: string

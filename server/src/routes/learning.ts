@@ -1,10 +1,12 @@
 ﻿import { Router } from 'express'
 import type { Request, Response } from 'express'
 import { db } from '../db/index.js'
-import { learningRecords, wordProgress, words, pets } from '../db/schemas/index.js'
+import { learningRecords, wordProgress, words, pets, streakRecords } from '../db/schemas/index.js'
 import { eq, and, gte, lte, sql, desc, or, isNull } from 'drizzle-orm'
 import { authMiddleware, getJwtPayload } from '../middleware/auth.js'
 import { calculateNextReview, isReviewDue } from '../services/ebbinghaus.js'
+import { earnStarlight } from '../services/starlight-service.js'
+import { userProfiles } from '../db/schemas/index.js'
 
 export const learningRoutes = Router()
 
@@ -162,6 +164,21 @@ learningRoutes.post('/session/end', async (req: Request, res: Response) => {
       }
     }
 
+    // 自动处理连胜打卡（学习即打卡，无需用户手动操作）
+    await autoStreakCheckin(userId)
+
+    // 星光获取：根据学习数据自动发放
+    try {
+      if (wordsLearned > 0) {
+        await earnStarlight(userId, 'earn_word', sessionId)
+      }
+      if (wordsReviewed > 0) {
+        await earnStarlight(userId, 'earn_review', sessionId)
+      }
+    } catch {
+      // 星光获取失败不影响主流程
+    }
+
     res.json({ session: updated })
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to end session' })
@@ -202,8 +219,8 @@ learningRoutes.post('/pronounce', async (req: Request, res: Response) => {
           lastReviewAt: new Date(),
           nextReviewAt,
           avgScore: existing.avgScore
-            ? (existing.avgScore * existing.reviewCount + score) / (existing.reviewCount + 1)
-            : score,
+            ? (existing.avgScore * existing.reviewCount + score / 100) / (existing.reviewCount + 1)
+            : score / 100,
           updatedAt: new Date(),
         })
         .where(eq(wordProgress.id, existing.id))
@@ -231,7 +248,7 @@ learningRoutes.post('/pronounce', async (req: Request, res: Response) => {
           correctCount: quality === 'correct' ? 1 : 0,
           lastReviewAt: new Date(),
           nextReviewAt,
-          avgScore: score,
+          avgScore: score / 100,
         })
         .returning()
 
@@ -476,15 +493,40 @@ learningRoutes.get('/daily-plan', async (req: Request, res: Response) => {
     const learnedIdSet = new Set(learnedIds.map((l) => l.wordId))
 
     // 推荐新词（同年级、未学过）
-    // 为避免 UUID 序列化问题，查同年级所有候选词后在应用层过滤
-    const candidateLimit = learnedIdSet.size > 0 ? learnedIdSet.size + 10 : 10
+    // 优先推荐兴趣主题的单词
+    let preferredThemes: string[] = []
+    try {
+      const [profile] = await db
+        .select({ interestMap: userProfiles.interestMap })
+        .from(userProfiles)
+        .where(eq(userProfiles.userId, userId))
+        .limit(1)
+      if (profile?.interestMap) {
+        const map = profile.interestMap as Record<string, number>
+        preferredThemes = Object.entries(map)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([k]) => k)
+      }
+    } catch { /* profile read optional */ }
+
+    const candidateLimit = learnedIdSet.size > 0 ? learnedIdSet.size + 20 : 20
     const candidates = await db
       .select()
       .from(words)
       .where(eq(words.gradeLevel, gradeLevel))
       .limit(candidateLimit)
 
-    const newWords = candidates.filter((w) => !learnedIdSet.has(w.id)).slice(0, 5)
+    const unlearned = candidates.filter((w) => !learnedIdSet.has(w.id))
+
+    // 兴趣主题优先排序
+    const sorted = [...unlearned].sort((a, b) => {
+      const aPref = a.theme && preferredThemes.includes(a.theme) ? 1 : 0
+      const bPref = b.theme && preferredThemes.includes(b.theme) ? 1 : 0
+      return bPref - aPref
+    })
+
+    const newWords = sorted.slice(0, 5)
 
     res.json({
       plan: {
@@ -497,6 +539,10 @@ learningRoutes.get('/daily-plan', async (req: Request, res: Response) => {
           translation: r.word.translation,
           phonetic: r.word.phonetic,
           difficulty: r.word.difficulty,
+          gradeLevel: r.word.gradeLevel,
+          theme: r.word.theme,
+          sentence: r.word.sentence,
+          sentenceCn: r.word.sentenceCn,
           status: r.progress.status,
           reviewCount: r.progress.reviewCount,
           avgScore: r.progress.avgScore,
@@ -507,7 +553,10 @@ learningRoutes.get('/daily-plan', async (req: Request, res: Response) => {
           translation: w.translation,
           phonetic: w.phonetic,
           difficulty: w.difficulty,
+          gradeLevel: w.gradeLevel,
           theme: w.theme,
+          sentence: w.sentence,
+          sentenceCn: w.sentenceCn,
         })),
         suggestedOrder: [
           ...reviewItems.map((r) => ({ type: 'review', wordId: r.word.id })),
@@ -613,3 +662,81 @@ learningRoutes.get('/progress', async (req: Request, res: Response) => {
     res.status(500).json({ error: err.message || 'Failed to get progress' })
   }
 })
+
+// ============================================================
+// 自动连胜打卡：学习会话结束时自动触发
+// 复用 streak_records 表的逻辑，学习即打卡
+// ============================================================
+async function autoStreakCheckin(userId: string) {
+  try {
+    const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+
+    const [existing] = await db
+      .select()
+      .from(streakRecords)
+      .where(eq(streakRecords.userId, userId))
+      .limit(1)
+
+    if (!existing) {
+      // 首次打卡
+      await db.insert(streakRecords).values({
+        userId,
+        currentStreak: 1,
+        longestStreak: 1,
+        lastActiveDate: today,
+        freezeCards: 1,
+        streakLevel: 0,
+      })
+      return
+    }
+
+    // 今天已经打过卡了
+    if (existing.lastActiveDate === today) return
+
+    const lastDate = new Date(existing.lastActiveDate || '')
+    const todayDate = new Date(today)
+    const diffDays = Math.round((todayDate.getTime() - lastDate.getTime()) / (24 * 60 * 60 * 1000))
+
+    if (diffDays === 1) {
+      // 连续打卡：streak +1
+      const newStreak = existing.currentStreak + 1
+      const newLongest = Math.max(newStreak, existing.longestStreak)
+      const newLevel = newStreak >= 60 ? 5 : newStreak >= 30 ? 4 : newStreak >= 15 ? 3 : newStreak >= 7 ? 2 : newStreak >= 3 ? 1 : 0
+      const newFreezeCards = existing.freezeCards + (newStreak % 7 === 0 ? 1 : 0)
+
+      await db
+        .update(streakRecords)
+        .set({
+          currentStreak: newStreak,
+          longestStreak: newLongest,
+          lastActiveDate: today,
+          streakLevel: newLevel,
+          freezeCards: newFreezeCards,
+          updatedAt: new Date(),
+        })
+        .where(eq(streakRecords.userId, userId))
+    } else if (diffDays === 2 && existing.freezeCards > 0) {
+      // 隔了一天但有冻结卡：自动消耗冻结卡保护连胜
+      await db
+        .update(streakRecords)
+        .set({
+          lastActiveDate: today,
+          freezeCards: existing.freezeCards - 1,
+          updatedAt: new Date(),
+        })
+        .where(eq(streakRecords.userId, userId))
+    } else {
+      // 断了：重置 streak
+      await db
+        .update(streakRecords)
+        .set({
+          currentStreak: 1,
+          lastActiveDate: today,
+          updatedAt: new Date(),
+        })
+        .where(eq(streakRecords.userId, userId))
+    }
+  } catch {
+    // streak 打卡失败不影响主流程
+  }
+}

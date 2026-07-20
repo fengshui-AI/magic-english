@@ -151,7 +151,7 @@ const bodyStyle = computed(() => {
   border-radius: 16px;
   font-size: 13px;
   line-height: 1.5;
-  color: var(--text);
+  color: var(--text-on-light);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
   text-align: center;
 }

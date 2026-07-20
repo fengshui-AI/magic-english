@@ -125,6 +125,8 @@ export const words = pgTable(
     difficulty: smallint('difficulty').notNull().default(1),
     gradeLevel: smallint('grade_level'),
     theme: varchar('theme', { length: 30 }),
+    sentence: text('sentence'),
+    sentenceCn: text('sentence_cn'),
     storyAnchor: text('story_anchor'),
     imageUrl: text('image_url'),
     audioUrl: text('audio_url'),
@@ -326,5 +328,98 @@ export const dialogueSessions = pgTable(
   },
   (table) => ({
     userIdx: index('idx_dialogue_user').on(table.userId),
+  }),
+)
+
+// ============================================================
+// 14. starlight_records — 星光流水表
+// 用途：记录每笔星光获取/消耗，前端不展示数字
+// 每日上限：低段20/中段30/高段40
+// ============================================================
+export const starlightRecords = pgTable(
+  'starlight_records',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    amount: integer('amount').notNull(),
+    sourceType: varchar('source_type', { length: 30 }).notNull(),
+    balance: integer('balance').notNull().default(0),
+    sourceRef: varchar('source_ref', { length: 100 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index('idx_starlight_user').on(table.userId),
+    dateIdx: index('idx_starlight_date').on(table.createdAt),
+    typeIdx: index('idx_starlight_type').on(table.sourceType),
+  }),
+)
+
+// ============================================================
+// 15. decorations — 装饰品定义表（种子数据）
+// ============================================================
+export const decorations = pgTable(
+  'decorations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    type: varchar('type', { length: 20 }).notNull(),
+    name: varchar('name', { length: 50 }).notNull(),
+    emoji: varchar('emoji', { length: 10 }).notNull(),
+    theme: varchar('theme', { length: 30 }),
+    unlockType: varchar('unlock_type', { length: 30 }).notNull(),
+    unlockValue: integer('unlock_value').notNull().default(0),
+    slot: varchar('slot', { length: 20 }),
+    gradeMin: smallint('grade_min').notNull().default(1),
+    gradeMax: smallint('grade_max').notNull().default(6),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    typeIdx: index('idx_decorations_type').on(table.type),
+    unlockIdx: index('idx_decorations_unlock').on(table.unlockType),
+  }),
+)
+
+// ============================================================
+// 16. user_decorations — 用户拥有的装饰品
+// ============================================================
+export const userDecorations = pgTable(
+  'user_decorations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    decorationId: uuid('decoration_id')
+      .notNull()
+      .references(() => decorations.id),
+    equipped: boolean('equipped').notNull().default(false),
+    position: smallint('position').default(0),
+    unlockedAt: timestamp('unlocked_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userDecoUnique: uniqueIndex('uq_user_decoration').on(table.userId, table.decorationId),
+    userIdx: index('idx_user_decorations_user').on(table.userId),
+    equippedIdx: index('idx_user_decorations_equipped').on(table.userId, table.equipped),
+  }),
+)
+
+// ============================================================
+// 17. garden_layouts — 花园布局表
+// ============================================================
+export const gardenLayouts = pgTable(
+  'garden_layouts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id)
+      .unique(),
+    layoutData: jsonb('layout_data').notNull().default({}),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index('idx_garden_user').on(table.userId),
   }),
 )

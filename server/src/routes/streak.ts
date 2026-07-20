@@ -4,6 +4,7 @@ import { db } from '../db/index.js'
 import { streakRecords } from '../db/schemas/index.js'
 import { authMiddleware, getJwtPayload } from '../middleware/auth.js'
 import { eq } from 'drizzle-orm'
+import { earnStarlight } from '../services/starlight-service.js'
 
 export const streakRoutes = Router()
 streakRoutes.use(authMiddleware)
@@ -183,6 +184,11 @@ streakRoutes.post('/checkin', async (req: Request, res: Response) => {
     const milestoneHit = milestones.includes(newStreak)
       ? { days: newStreak, reward: newStreak >= 7 ? '冻结卡 ×1' : '新成就解锁' }
       : null
+
+    // 星光获取：打卡奖励（dayN → +N 星光，最高+7）
+    try {
+      await earnStarlight(userId, 'earn_streak')
+    } catch { /* 星光获取失败不影响打卡 */ }
 
     res.json({
       ...formatStreak({ ...updated, isFrozen: false }),

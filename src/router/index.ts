@@ -71,6 +71,12 @@ const router = createRouter({
       component: () => import('../views/ParentSettings.vue'),
       meta: { requiresAuth: true, parentOnly: true },
     },
+    {
+      path: '/garden',
+      name: 'garden',
+      component: () => import('../views/GardenPage.vue'),
+      meta: { requiresAuth: true },
+    },
     // ============================================================
     // 合规页面（T7.4 上线 Checklist）
     // ============================================================
@@ -117,6 +123,12 @@ router.beforeEach(async (to, _from, next) => {
   // 家长专属页面：非 parent 角色拒绝访问
   if (to.meta.parentOnly && authStore.user?.role !== 'parent') {
     next({ name: 'home' })
+    return
+  }
+
+  // 家长角色访问孩子页面 → 重定向到家长面板
+  if (!to.meta.parentOnly && authStore.user?.role === 'parent' && to.name !== 'login' && to.name !== 'parent-dashboard' && to.name !== 'parent-settings') {
+    next({ name: 'parent-dashboard' })
     return
   }
 

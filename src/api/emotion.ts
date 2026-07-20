@@ -88,7 +88,7 @@ export const emotionApi = {
   ): Promise<EmotionEventResult> {
     return apiRequest('/emotion/event', {
       method: 'POST',
-      body: JSON.stringify({ type, intensity, context }),
+      body: { type, intensity, context },
     })
   },
 

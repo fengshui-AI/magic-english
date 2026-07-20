@@ -164,6 +164,7 @@ import { useRouter } from 'vue-router'
 import { authStore } from '../stores/auth'
 import { createPet } from '../stores/pet'
 import { userApi } from '../api/user'
+import { profileApi } from '../api/profile'
 
 const router = useRouter()
 const step = ref(0)
@@ -258,6 +259,11 @@ async function completeOnboarding() {
           grade: form.grade,
         })
         .catch(() => {})
+    }
+
+    // 保存兴趣标签到画像
+    if (form.interests.length > 0) {
+      await profileApi.saveInterests(form.interests).catch(() => {})
     }
 
     // 创建豆豆

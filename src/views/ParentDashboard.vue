@@ -250,6 +250,10 @@ onMounted(async () => {
     ])
     report.value = weeklyData
     historyReports.value = (historyData.reports || []).slice(1)
+    // 从周报中提取孩子信息
+    if (weeklyData) {
+      currentChild.value = { name: weeklyData.childName, id: weeklyData.childId }
+    }
   } catch (e: any) {
     console.error('Failed to load weekly report:', e)
     // 不再静默降级为 mock 数据，保留 null 让 UI 显示错误状态

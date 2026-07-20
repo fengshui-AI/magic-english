@@ -11,6 +11,9 @@ import { profileRoutes } from './routes/profile.js'
 import { reportRoutes } from './routes/reports.js'
 import { dialogueRoutes } from './routes/dialogue.js'
 import { speechRoutes } from './routes/speech.js'
+import { starlightRoutes } from './routes/starlight.js'
+import { decorationRoutes } from './routes/decorations.js'
+import { gardenRoutes } from './routes/garden.js'
 
 const app = express()
 
@@ -63,6 +66,9 @@ app.use('/api/v1/profile', profileRoutes)
 app.use('/api/v1/reports', reportRoutes)
 app.use('/api/v1/dialogue', dialogueRoutes)
 app.use('/api/v1/speech', speechRoutes)
+app.use('/api/v1/starlight', starlightRoutes)
+app.use('/api/v1/decorations', decorationRoutes)
+app.use('/api/v1/garden', gardenRoutes)
 
 // Global error handler
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

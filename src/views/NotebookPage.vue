@@ -90,7 +90,7 @@
     <div class="card-grid">
       <transition-group name="card-list" tag="div" class="grid-wrap">
         <div
-          v-for="(word, idx) in sortedWords"
+          v-for="word in sortedWords"
           :key="word.id"
           class="word-card"
           :class="'rarity-' + getRarity(word.mastery)"
@@ -315,6 +315,11 @@ const THEME_STYLES: Record<string, { emoji: string; bg: string }> = {
   space: { emoji: '🚀', bg: '#e8e0ff' },
 }
 
+// ============================================================
+// 单词专属 emoji 映射（从独立文件导入，492个词）
+// ============================================================
+import { WORD_EMOJI_MAP } from '../data/word-emoji'
+
 const themes = ref<{ id: string; name: string; icon: string }[]>([
   { id: 'animal', name: '动物', icon: '🐱' }, { id: 'food', name: '美食', icon: '🍕' },
   { id: 'school', name: '学校', icon: '📚' }, { id: 'nature', name: '自然', icon: '🌿' },
@@ -424,14 +429,15 @@ onMounted(async () => {
         id: t, name: THEME_META[t]?.name || t, icon: THEME_META[t]?.icon || '📖',
       }))
     }
-    const result = await fetchWords({ limit: 50 })
+    const result = await fetchWords({ limit: 500 })
     if (result && result.items.length > 0) {
       allWords.value = result.items.map((w: any) => {
         const style = THEME_STYLES[w.theme || ''] || { emoji: '📖', bg: '#f0e6ff' }
+        const wordEmoji = WORD_EMOJI_MAP[w.word?.toLowerCase()] || style.emoji
         const progress = w.progress
         return {
           id: w.id, word: w.word, meaning: w.translation,
-          phonetic: w.phonetic || undefined, emoji: style.emoji, bg: style.bg,
+          phonetic: w.phonetic || undefined, emoji: wordEmoji, bg: style.bg,
           theme: w.theme || 'school',
           mastery: progress?.avgScore ? Math.round(progress.avgScore * 100) : 0,
           learnedAt: w.createdAt?.split('T')[0] || '',
