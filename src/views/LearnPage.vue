@@ -173,8 +173,12 @@
           </div>
         </div>
 
-        <!-- 悬浮字母块（填空模式下显示） -->
+        <!-- 悬浮字母块（填空模式下显示，可折叠） -->
         <div v-if="subStep === 5 && spellMode === 'gap' && spellStepResult === ''" class="letter-keyboard">
+          <div class="kb-handle" @click="keyboardCollapsed = !keyboardCollapsed">
+            <span class="kb-handle-bar"></span>
+          </div>
+          <template v-if="!keyboardCollapsed">
           <div class="letter-row">
             <button class="letter-key letter-action" @click="tapDelete">
               ⌫
@@ -198,6 +202,7 @@
               @click="tapLetter(ch)"
             >{{ ch }}</button>
           </div>
+          </template>
         </div>
 
         <!-- ============================================================ -->
@@ -347,6 +352,9 @@
           </button>
           <button v-if="speakFailed" class="action-btn retry-btn" @click="retrySpeak">
             <span>🔄</span> 再试一次
+          </button>
+          <button v-if="speakFailed" class="action-btn skip-btn" @click="skipSpeak">
+            <span>⏭️</span> 跳过
           </button>
           <button v-if="score !== null" class="action-btn retry-btn" @click="retrySpeak">
             <span>🔄</span> 再试一次
@@ -843,6 +851,7 @@ const spellSegments = computed<SpellSegment[]>(() => {
 })
 
 const currentGapIndex = ref(0)
+const keyboardCollapsed = ref(false) // 悬浮键盘折叠状态
 const spellStepResult = ref<'correct' | 'wrong' | ''>('')
 const spellStepAnswer = ref('') // 完整拼写模式用
 
@@ -1057,7 +1066,53 @@ async function loadTodayWords() {
     console.error('Failed to load words:', e)
   } finally {
     wordsLoading.value = false
+    // 加载成功后尝试恢复上次学习进度
+    if (!wordsError.value && words.value.length > 0) {
+      restoreProgress()
+    }
   }
+}
+
+// 学习进度持久化：恢复上次未完成的位置
+const PROGRESS_KEY = 'learn_progress'
+
+function saveProgress() {
+  if (words.value.length === 0) return
+  sessionStorage.setItem(PROGRESS_KEY, JSON.stringify({
+    wordIds: words.value.map(w => w.wordId || w.word),
+    currentIndex: currentIndex.value,
+    subStep: subStep.value,
+    timestamp: Date.now(),
+  }))
+}
+
+function restoreProgress(): boolean {
+  try {
+    const raw = sessionStorage.getItem(PROGRESS_KEY)
+    if (!raw) return false
+    const saved = JSON.parse(raw)
+    // 超过 30 分钟视为过期
+    if (Date.now() - saved.timestamp > 30 * 60 * 1000) {
+      sessionStorage.removeItem(PROGRESS_KEY)
+      return false
+    }
+    // 检查词表是否一致
+    const currentWordIds = words.value.map(w => w.wordId || w.word)
+    if (JSON.stringify(saved.wordIds) !== JSON.stringify(currentWordIds)) {
+      sessionStorage.removeItem(PROGRESS_KEY)
+      return false
+    }
+    currentIndex.value = Math.min(saved.currentIndex, words.value.length - 1)
+    subStep.value = saved.subStep
+    return true
+  } catch {
+    sessionStorage.removeItem(PROGRESS_KEY)
+    return false
+  }
+}
+
+function clearProgress() {
+  sessionStorage.removeItem(PROGRESS_KEY)
 }
 
 onMounted(() => {
@@ -1072,12 +1127,14 @@ const wordEmoji = computed(() => currentWord.value?.emoji || '📖')
 const wordBg = computed(() => currentWord.value?.bg || '#f0e6ff')
 const progressPct = computed(() => (currentIndex.value / words.value.length) * 100)
 
-// 进入 Step 5 或切换单词时重置填空输入
+// 进入 Step 5 或切换单词时重置填空输入 + 持久化进度
 watch([subStep, currentIndex], () => {
   if (subStep.value === 5) {
     spellGapInputs.value = []
     currentGapIndex.value = 0
+    keyboardCollapsed.value = false
   }
+  saveProgress()
 })
 
 // 跟读状态
@@ -1294,6 +1351,17 @@ function startSpeaking() {
 
 function retrySpeak() {
   startSpeaking()
+}
+
+/** 跳过跟读：直接给保底分并继续 */
+function skipSpeak() {
+  isRecording.value = false
+  speakFailed.value = false
+  score.value = 50 // 跳过给保底分
+  accuracy.value = 50
+  fluency.value = 50
+  completeness.value = 50
+  triggerEmotionEvent('correct_answer', 0.5, { word: currentWord.value?.word || '', skipped: true })
 }
 
 function afterSpeak() {
@@ -1548,6 +1616,7 @@ function handleBack() {
     spellStepResult.value = ''
     return
   }
+  clearProgress()
   router.push('/')
 }
 
@@ -1684,6 +1753,7 @@ function showToast(msg: string) {
 /* ============ 单词学习模式 ============ */
 .word-mode {
   padding: 24px 16px;
+  padding-bottom: 280px; /* 为悬浮键盘留空间 */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1981,9 +2051,31 @@ function showToast(msg: string) {
   background: rgba(255, 255, 255, 0.97);
   backdrop-filter: blur(12px);
   border-top: 1px solid #eee;
-  padding: 12px 16px 24px;
+  padding: 0 16px 24px;
   z-index: 100;
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.06);
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.kb-handle {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 4px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.kb-handle-bar {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: #ddd;
+  transition: background 0.2s;
+}
+
+.kb-handle:hover .kb-handle-bar {
+  background: #bbb;
 }
 
 .letter-row {
@@ -2443,6 +2535,18 @@ function showToast(msg: string) {
 
 .retry-btn:hover {
   background: #e8e4f8;
+}
+
+.skip-btn {
+  flex: 1;
+  background: #f5f5f5;
+  color: #999;
+  font-size: 14px;
+}
+
+.skip-btn:hover {
+  background: #e8e8e8;
+  color: #777;
 }
 
 /* ============ 复习模式 ============ */

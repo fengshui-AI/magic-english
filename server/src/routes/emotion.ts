@@ -83,14 +83,43 @@ emotionRoutes.get('/current', async (req: Request, res: Response) => {
 emotionRoutes.post('/event', async (req: Request, res: Response) => {
   try {
     const { userId } = getJwtPayload(req)
-    const body = req.body as {
+    const raw = req.body
+
+    // 健壮校验：防御前端重复 JSON.stringify 等异常
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      res.status(400).json({
+        error: 'Invalid request body',
+        hint: 'Expected JSON object with { type, intensity?, context? }',
+      })
+      return
+    }
+
+    const body = raw as {
       type: EmotionEventType
       intensity?: number
       context?: Record<string, unknown>
     }
 
-    if (!body.type) {
-      res.status(400).json({ error: 'Missing event type' })
+    // 校验事件类型
+    const VALID_TYPES = [
+      'correct_answer', 'wrong_answer', 'perfect_score', 'streak_milestone',
+      'new_word_mastered', 'session_start', 'session_complete', 'idle_too_long',
+      'review_forgot', 'review_correct', 'level_up', 'daily_checkin',
+      'streak_lost', 'freeze_used', 'greeting_response',
+    ]
+    if (!body.type || !VALID_TYPES.includes(body.type)) {
+      res.status(400).json({
+        error: 'Missing or invalid event type',
+        validTypes: VALID_TYPES,
+      })
+      return
+    }
+
+    // 校验 intensity（可选，需在 0-1 范围）
+    if (body.intensity !== undefined && (typeof body.intensity !== 'number' || body.intensity < 0 || body.intensity > 1)) {
+      res.status(400).json({
+        error: 'intensity must be a number between 0 and 1',
+      })
       return
     }
 

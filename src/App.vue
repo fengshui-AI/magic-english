@@ -6,15 +6,20 @@
       </transition>
     </router-view>
 
-    <!-- 底部导航 — 3个Tab：星球 / 手账本 / 豆豆 -->
+    <!-- 底部导航 — 4个Tab：星球 / 学习 / 手账本 / 豆豆 -->
     <nav v-if="showNav" class="bottom-nav">
       <router-link to="/" class="nav-item" exact-active-class="active">
         <span class="nav-icon">🗺️</span>
         <span class="nav-label">星球</span>
       </router-link>
 
-      <router-link to="/notebook" class="nav-item nav-cta" active-class="active">
-        <span class="nav-icon cta-icon">📖</span>
+      <router-link to="/learn" class="nav-item" active-class="active">
+        <span class="nav-icon">📝</span>
+        <span class="nav-label">学习</span>
+      </router-link>
+
+      <router-link to="/notebook" class="nav-item" active-class="active">
+        <span class="nav-icon">📖</span>
         <span class="nav-label">手账本</span>
       </router-link>
 
@@ -68,7 +73,7 @@ const showNav = computed(() => !hideNavRoutes.includes(route.name as string))
   display: flex;
   justify-content: space-around;
   align-items: center;
-  padding: 8px 16px calc(8px + var(--safe-bottom, 0px));
+  padding: 8px 4px calc(8px + var(--safe-bottom, 0px));
   background: rgba(15, 15, 35, 0.85);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -81,7 +86,7 @@ const showNav = computed(() => !hideNavRoutes.includes(route.name as string))
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: 6px 20px;
+  padding: 6px 14px;
   border-radius: var(--radius-xl);
   cursor: pointer;
   transition: all var(--transition-base);
@@ -90,6 +95,8 @@ const showNav = computed(() => !hideNavRoutes.includes(route.name as string))
   font-size: var(--text-xs);
   font-weight: var(--font-medium);
   position: relative;
+  flex: 1;
+  max-width: 80px;
 }
 
 .nav-item.active {
@@ -120,38 +127,5 @@ const showNav = computed(() => !hideNavRoutes.includes(route.name as string))
 .nav-label {
   font-size: 10px;
   letter-spacing: 0.5px;
-}
-
-/* CTA 手账本 — 魔法高亮 */
-.nav-cta {
-  margin-top: -18px;
-}
-
-.nav-cta .cta-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  font-size: 24px;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
-  box-shadow: 0 4px 20px rgba(107, 92, 231, 0.4), 0 0 40px rgba(255, 107, 157, 0.2);
-  transition: all var(--transition-base);
-}
-
-.nav-cta.active .cta-icon {
-  box-shadow: 0 6px 24px rgba(107, 92, 231, 0.6), 0 0 50px rgba(255, 107, 157, 0.3);
-  transform: scale(1.05);
-}
-
-.nav-cta .nav-label {
-  margin-top: 4px;
-  color: var(--color-primary-light);
-  font-weight: var(--font-semibold);
-}
-
-.nav-cta.active .nav-label {
-  color: var(--text-primary);
 }
 </style>
