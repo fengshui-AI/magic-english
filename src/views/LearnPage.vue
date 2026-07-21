@@ -29,6 +29,20 @@
         <div class="progress-fill" :style="{ width: progressPct + '%' }"></div>
       </div>
       <span class="progress-text">{{ currentIndex + 1 }} / {{ words.length }}</span>
+
+      <!-- 开发者跳过菜单（仅 dev 模式） -->
+      <div v-if="isDev" class="dev-skip-wrap">
+        <button class="dev-skip-btn" @click="showDevMenu = !showDevMenu" title="开发者跳过">⏭️</button>
+        <transition name="fade">
+          <div v-if="showDevMenu" class="dev-skip-menu" @click.stop>
+            <button @click="devSkipStep">跳过当前步骤</button>
+            <button @click="devSkipWord">跳过当前单词</button>
+            <button v-if="mode === 'word' || mode === 'speak'" @click="devJumpToReview">跳到复习</button>
+            <button v-if="mode !== 'dialogue'" @click="devJumpToDialogue">跳到专项对话</button>
+            <button v-if="mode !== 'result'" @click="devJumpToResult">跳到结果页</button>
+          </div>
+        </transition>
+      </div>
     </div>
 
     <!-- 模式: word — 五步渐进学习（PRD 7.3.4） -->
@@ -54,7 +68,7 @@
         <!-- ============================================================ -->
         <!-- Step 1 & 2: 单词卡片（图文布局：图→中文→英文→音标） -->
         <!-- ============================================================ -->
-        <div v-if="subStep <= 2" class="word-card">
+        <div v-if="subStep <= 2" class="word-card" :class="{ 'step1-emoji': subStep === 1 }">
           <!-- 配图 emoji（低年级显示） -->
           <div v-if="showWordEmoji" class="word-emoji-big">{{ wordEmoji }}</div>
 
@@ -497,12 +511,30 @@
 
       <!-- 模式: result — 学习结算 -->
       <div v-else-if="mode === 'result'" key="result" class="result-mode">
-        <div class="result-header">
-          <div class="result-badge">🎉</div>
-          <h2 class="result-title">学习完成！</h2>
-          <p class="result-sub">你又进步了一点点 ✨</p>
+        <!-- 庆祝撒花背景 -->
+        <div class="confetti-container" v-if="showConfetti">
+          <span v-for="i in 20" :key="'c'+i" class="confetti-piece" :style="confettiStyle(i)"></span>
         </div>
 
+        <!-- 等级徽章 -->
+        <div class="result-header">
+          <div class="result-badge" :class="resultGrade.emojiClass">{{ resultGrade.emoji }}</div>
+          <h2 class="result-title">{{ resultGrade.title }}</h2>
+          <p class="result-sub">{{ resultGrade.subtitle }}</p>
+        </div>
+
+        <!-- 星星收集动画 -->
+        <div class="star-collect">
+          <span
+            v-for="i in starsEarned"
+            :key="'s'+i"
+            class="star-item"
+            :style="{ animationDelay: (i * 0.15) + 's' }"
+          >⭐</span>
+          <span v-if="starsEarned === 0" class="no-star-hint">继续加油，星星在等你～</span>
+        </div>
+
+        <!-- 统计卡片 -->
         <div class="result-stats">
           <div class="stat-card">
             <span class="stat-icon">📝</span>
@@ -516,27 +548,45 @@
           </div>
           <div class="stat-card">
             <span class="stat-icon">✅</span>
-            <span class="stat-num">{{ correctCount }}</span>
+            <span class="stat-num">{{ correctPct }}%</span>
             <span class="stat-label">正确率</span>
           </div>
           <div class="stat-card">
-            <span class="stat-icon">⭐</span>
-            <span class="stat-num">{{ starsEarned }}</span>
-            <span class="stat-label">获得星星</span>
+            <span class="stat-icon">🔥</span>
+            <span class="stat-num">{{ streakStore.currentStreak || 0 }}</span>
+            <span class="stat-label">连续天数</span>
           </div>
         </div>
 
         <!-- 豆豆鼓励 -->
-        <div class="dodo-cheer">
-          <div class="cheer-avatar animate-bounce">🐣</div>
+        <div class="dodo-cheer" :class="resultGrade.cheerClass">
+          <div class="cheer-avatar animate-bounce">{{ petStore.stage === 'seed' ? '🌰' : petStore.stage === 'sprout' ? '🌱' : petStore.stage === 'bloom' ? '🌸' : '🐣' }}</div>
           <div class="cheer-bubble">
             <p>{{ cheerMessage }}</p>
           </div>
         </div>
 
+        <!-- 本次学习的单词回顾 -->
+        <div class="word-review" v-if="words.length > 0">
+          <h3 class="review-title">📋 今天学的单词</h3>
+          <div class="review-word-list">
+            <button
+              v-for="w in words"
+              :key="w.wordId || w.word"
+              class="review-word-chip"
+              @click="speakText(w.word)"
+            >
+              <span>{{ w.emoji || '📖' }}</span>
+              <span class="chip-word">{{ w.word }}</span>
+              <span class="chip-meaning">{{ w.meaning }}</span>
+              <span class="chip-speaker">🔊</span>
+            </button>
+          </div>
+        </div>
+
         <div class="result-actions">
-          <button class="btn btn-secondary" @click="goHome">返回首页</button>
-          <button class="btn btn-primary" @click="startNew">再学一组</button>
+          <button class="btn btn-secondary" @click="goHome">🏠 返回首页</button>
+          <button class="btn btn-primary" @click="startNew">🔄 再学一组</button>
         </div>
       </div>
     </transition>
@@ -552,11 +602,16 @@ import { triggerEmotionEvent } from '../stores/emotion'
 import { fetchDailyPlan, completeTaskByType } from '../stores/learning'
 import { fetchWords } from '../stores/words'
 import { authStore } from '../stores/auth'
+import { streakStore } from '../stores/streak'
 import { submitPronounce } from '../stores/session'
 import { WORD_EMOJI_MAP } from '../data/word-emoji'
 import { generateStory } from '../data/story-anchor'
 
 const router = useRouter()
+
+// 开发者跳过菜单（测试阶段始终显示，上线前改回 import.meta.env.DEV）
+const isDev = true
+const showDevMenu = ref(false)
 
 // 模式: word | speak | review | dialogue | result
 const mode = ref<'word' | 'speak' | 'review' | 'dialogue' | 'result'>('word')
@@ -673,6 +728,57 @@ function nextSubStep() {
     // 当前词学完，进入下一个词
     markKnown()
   }
+}
+
+// ============================================================
+// 开发者跳过功能（仅 dev 模式可用）
+// ============================================================
+function devSkipStep() {
+  showDevMenu.value = false
+  if (mode.value === 'word') {
+    subStepScore.value = null
+    subStepFailed.value = false
+    subStepSpeaking.value = false
+    spellStepResult.value = ''
+    spellStepAnswer.value = ''
+    const maxStep = skipSpelling.value ? 4 : 5
+    if (subStep.value < maxStep) {
+      subStep.value++
+      if (subStep.value === 1 || subStep.value === 3) {
+        nextTick(() => playSubStepTTS())
+      }
+    } else {
+      markKnown()
+    }
+  }
+}
+
+function devSkipWord() {
+  showDevMenu.value = false
+  if (mode.value === 'word') {
+    markKnown()
+  } else if (mode.value === 'review') {
+    reviewIndex.value = Math.min(reviewIndex.value + 1, reviewQuestions.value.length - 1)
+    reviewAnswered.value = false
+  }
+}
+
+function devJumpToReview() {
+  showDevMenu.value = false
+  mode.value = 'review'
+  reviewIndex.value = 0
+  reviewQuestions.value = generateReviewQuestions()
+  reviewAnswered.value = false
+}
+
+function devJumpToDialogue() {
+  showDevMenu.value = false
+  startDialogue()
+}
+
+function devJumpToResult() {
+  showDevMenu.value = false
+  showResult()
 }
 
 // 子步骤 TTS 朗读
@@ -891,9 +997,19 @@ function tapDelete() {
   }
 }
 
-// 检查某个字母是否已使用（避免重复点）
+// 检查某个字母是否已用完（按需求量统计，相同字母可多次点击）
+// 例如 apple 需要 2 个 p，第一次点 p 不会被禁用，点了两次后才禁用
 function isLetterUsed(letter: string): boolean {
-  return spellGapInputs.value.some(v => v === letter)
+  // 获取所有需要填入的正确答案（按 gap 顺序）
+  const gaps = spellSegments.value.filter(s => s.isGap)
+  const needed: Record<string, number> = {}
+  gaps.forEach(g => {
+    const a = (g.answer || '').toLowerCase()
+    needed[a] = (needed[a] || 0) + 1
+  })
+  // 统计已填入的该字母数量
+  const filled = spellGapInputs.value.filter(v => v.toLowerCase() === letter.toLowerCase()).length
+  return filled >= (needed[letter.toLowerCase()] || 0)
 }
 
 // 拼写挑战提交（Step 5）
@@ -1012,7 +1128,7 @@ async function loadTodayWords() {
             meaning: w.translation,
             example: w.sentence || `Let us learn the word "${w.word}"!`,
             exampleCn: w.sentenceCn || `我们来学单词"${w.translation}"吧！`,
-            emoji: style.emoji,
+            emoji: WORD_EMOJI_MAP[w.word?.toLowerCase()] || style.emoji,
             bg: style.bg,
           }
         })
@@ -1042,7 +1158,7 @@ async function loadTodayWords() {
             meaning: w.translation,
             example: w.sentence || `Let us learn the word "${w.word}"!`,
             exampleCn: w.sentenceCn || `我们来学单词"${w.translation}"吧！`,
-            emoji: style.emoji,
+            emoji: WORD_EMOJI_MAP[w.word?.toLowerCase()] || style.emoji,
             bg: style.bg,
           }
         }),
@@ -1056,7 +1172,7 @@ async function loadTodayWords() {
           meaning: w.translation,
           example: `Let's learn the word "${w.word}"!`,
           exampleCn: `我们来学单词"${w.translation}"吧！`,
-          emoji: style.emoji,
+          emoji: WORD_EMOJI_MAP[w.word?.toLowerCase()] || style.emoji,
           bg: style.bg,
         }
       })
@@ -1213,8 +1329,8 @@ const quizTypeLabel = computed(() => {
   return map[reviewQuestion.value.type] || ''
 })
 
-// 低年级复习时显示 emoji 提示
-const showReviewEmoji = computed(() => userGrade.value <= 3)
+// 低年级复习时显示 emoji 提示（1-2 年级有图片，3 年级以上不显示）
+const showReviewEmoji = computed(() => userGrade.value <= 2)
 
 const reviewEmoji = computed(() => {
   if (!reviewQuestion.value) return '📖'
@@ -1388,6 +1504,18 @@ function afterSpeak() {
 function markKnown() {
   triggerEmotionEvent('correct_answer', 0.8, { word: currentWord.value?.word || '' })
   feedPet(5)
+  // 写入 word_progress 表，驱动艾宾浩斯复习队列
+  // 默认给 80 分（五步流程完成 = 基本掌握）
+  const w = currentWord.value
+  if (w?.wordId != null) {
+    submitPronounce({
+      wordId: w.wordId,
+      score: 80,
+      accuracy: 80,
+      fluency: 80,
+      completeness: 80,
+    }).catch(() => {})
+  }
   // 重置五步子步骤
   subStep.value = 1
   subStepScore.value = null
@@ -1481,6 +1609,8 @@ function showResult() {
   correctCount.value = reviewCorrectCount.value
   starsEarned.value = Math.floor(correctCount.value / 2) + speakCount.value
   mode.value = 'result'
+  // 正确率 >= 70% 时撒花
+  showConfetti.value = correctPct.value >= 70
   feedPet(starsEarned.value * 5)
   // 真实学习完成后，才把首页对应的每日任务标记为完成（由学习行为驱动）
   completeTaskByType(['word', 'speak', 'listen'], Math.max(3, starsEarned.value))
@@ -1593,6 +1723,69 @@ const cheerMessage = computed(() => {
   return '没关系，学习需要时间。再来一次吧！💪'
 })
 
+// 正确率百分比
+const correctPct = computed(() => {
+  const total = reviewQuestions.value.length || words.value.length || 1
+  return Math.round((correctCount.value / total) * 100)
+})
+
+// 是否撒花（正确率 >= 70%）
+const showConfetti = ref(false)
+
+// 学习结果等级
+interface ResultGrade {
+  emoji: string
+  emojiClass: string
+  title: string
+  subtitle: string
+  cheerClass: string
+}
+const resultGrade = computed<ResultGrade>(() => {
+  const pct = correctPct.value
+  if (pct >= 90) return {
+    emoji: '🏆', emojiClass: 'grade-s',
+    title: '完美通关！',
+    subtitle: '你简直是英语小天才！',
+    cheerClass: 'cheer-gold',
+  }
+  if (pct >= 70) return {
+    emoji: '🌟', emojiClass: 'grade-a',
+    title: '非常棒！',
+    subtitle: '又快又好，继续保持！',
+    cheerClass: 'cheer-silver',
+  }
+  if (pct >= 40) return {
+    emoji: '💪', emojiClass: 'grade-b',
+    title: '不错哦！',
+    subtitle: '再练练就会更厉害！',
+    cheerClass: 'cheer-bronze',
+  }
+  return {
+    emoji: '🌱', emojiClass: 'grade-c',
+    title: '继续加油！',
+    subtitle: '每次练习都会进步一点点',
+    cheerClass: '',
+  }
+})
+
+// 撒花粒子样式
+const CONFETTI_COLORS = ['#ff6b9d', '#ffa502', '#7bed9f', '#70a1ff', '#ff6348', '#eccc68', '#a29bfe', '#fd79a8']
+function confettiStyle(i: number) {
+  const color = CONFETTI_COLORS[i % CONFETTI_COLORS.length]
+  const left = Math.random() * 100
+  const delay = Math.random() * 2
+  const size = 6 + Math.random() * 8
+  const duration = 2 + Math.random() * 2
+  return {
+    '--confetti-color': color,
+    left: left + '%',
+    animationDelay: delay + 's',
+    width: size + 'px',
+    height: size + 'px',
+    animationDuration: duration + 's',
+  }
+}
+
 function handleBack() {
   if (mode.value === 'result') {
     router.push('/')
@@ -1650,6 +1843,7 @@ function showToast(msg: string) {
 .learn-page {
   min-height: 100vh;
   background: linear-gradient(180deg, #f8f7ff 0%, #f0ecff 100%);
+  color: var(--text-on-light); /* 浅色背景上使用深色文字，防止继承 body 白色 */
   padding-bottom: 40px;
 }
 
@@ -1663,7 +1857,7 @@ function showToast(msg: string) {
   justify-content: center;
   min-height: 60vh;
   gap: 16px;
-  color: var(--text-secondary, #666);
+  color: var(--text-on-light-muted);
   font-size: 16px;
 }
 
@@ -1750,6 +1944,66 @@ function showToast(msg: string) {
   text-align: right;
 }
 
+/* 开发者跳过菜单 */
+.dev-skip-wrap {
+  position: relative;
+  margin-left: 4px;
+}
+
+.dev-skip-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px dashed #ccc;
+  background: rgba(0, 0, 0, 0.03);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.dev-skip-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: #999;
+}
+
+.dev-skip-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+  padding: 6px;
+  min-width: 150px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dev-skip-menu button {
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.dev-skip-menu button:hover {
+  background: #f0ecff;
+  color: #6c5ce7;
+}
+
 /* ============ 单词学习模式 ============ */
 .word-mode {
   padding: 24px 16px;
@@ -1796,7 +2050,7 @@ function showToast(msg: string) {
 
 .step-hint {
   font-size: 15px;
-  color: var(--text-light, #888);
+  color: var(--text-on-light-muted);
   text-align: center;
   margin-bottom: 8px;
 }
@@ -2185,6 +2439,18 @@ function showToast(msg: string) {
   text-align: center;
   padding: 24px 0 8px;
   animation: float 3s ease-in-out infinite;
+}
+
+/* Step 1 的 emoji 更大，作为视觉焦点 */
+.word-card.step1-emoji .word-emoji-big {
+  font-size: 80px;
+  padding: 32px 0 12px;
+}
+
+@media (min-width: 480px) {
+  .word-card.step1-emoji .word-emoji-big {
+    font-size: 96px;
+  }
 }
 
 @keyframes float {
@@ -2688,6 +2954,12 @@ function showToast(msg: string) {
   outline: none;
   transition: all 0.3s;
   letter-spacing: 2px;
+  background: white;
+  color: #333;
+}
+
+.spell-input::placeholder {
+  color: #aaa;
 }
 
 .spell-input:focus {
@@ -2785,6 +3057,12 @@ function showToast(msg: string) {
   font-size: 16px;
   outline: none;
   transition: all 0.3s;
+  background: white;
+  color: #333;
+}
+
+.reply-input::placeholder {
+  color: #aaa;
 }
 
 .reply-input:focus {
@@ -2837,7 +3115,7 @@ function showToast(msg: string) {
 
 .dialogue-progress {
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--text-on-light-muted);
 }
 
 /* ============ 结算模式 ============ */
@@ -2872,12 +3150,12 @@ function showToast(msg: string) {
 .result-title {
   font-size: 26px;
   font-weight: 700;
-  color: var(--text);
+  color: var(--text-on-light);
 }
 
 .result-sub {
   font-size: 15px;
-  color: var(--text-light);
+  color: var(--text-on-light-muted);
   margin-top: 4px;
 }
 
@@ -2939,6 +3217,146 @@ function showToast(msg: string) {
   font-size: 14px;
   line-height: 1.6;
   color: var(--text-on-light);
+}
+
+/* ============ 结果页增强 ============ */
+
+/* 撒花背景 */
+.confetti-container {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  z-index: 200;
+  overflow: hidden;
+}
+
+.confetti-piece {
+  position: absolute;
+  top: -10px;
+  border-radius: 3px;
+  background: var(--confetti-color, #ff6b9d);
+  animation: confetti-fall linear forwards;
+  opacity: 0.9;
+}
+
+@keyframes confetti-fall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  80% { opacity: 1; }
+  100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+}
+
+/* 等级徽章 */
+.result-badge {
+  font-size: 64px;
+  margin-bottom: 4px;
+  animation: badge-pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes badge-pop {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.2); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.grade-s .result-badge { filter: drop-shadow(0 0 12px #ffd700); }
+.grade-a .result-badge { filter: drop-shadow(0 0 8px #ffa502); }
+
+/* 星星收集动画 */
+.star-collect {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  min-height: 36px;
+  align-items: center;
+}
+
+.star-item {
+  font-size: 28px;
+  animation: star-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
+@keyframes star-pop {
+  0% { transform: scale(0) rotate(-30deg); opacity: 0; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+.no-star-hint {
+  color: var(--text-on-light-muted);
+  font-size: 14px;
+}
+
+/* 豆豆鼓励卡片增强 */
+.cheer-gold {
+  background: linear-gradient(135deg, #fff9e6, #ffeaa7) !important;
+  border: 2px solid #fdcb6e;
+}
+
+.cheer-silver {
+  background: linear-gradient(135deg, #f5f6fa, #dfe6e9) !important;
+  border: 2px solid #b2bec3;
+}
+
+.cheer-bronze {
+  background: linear-gradient(135deg, #fff5f0, #ffe0d0) !important;
+  border: 2px solid #fab1a0;
+}
+
+/* 单词回顾 */
+.word-review {
+  width: 100%;
+  max-width: 360px;
+}
+
+.review-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-on-light);
+  margin-bottom: 10px;
+}
+
+.review-word-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.review-word-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 20px;
+  border: 1.5px solid #e8e4f0;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 14px;
+}
+
+.review-word-chip:hover {
+  border-color: var(--primary);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(108, 92, 231, 0.12);
+}
+
+.review-word-chip:active {
+  transform: scale(0.96);
+}
+
+.chip-word {
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.chip-meaning {
+  color: var(--text-on-light-muted);
+  font-size: 12px;
+}
+
+.chip-speaker {
+  font-size: 12px;
+  opacity: 0.5;
 }
 
 .result-actions {

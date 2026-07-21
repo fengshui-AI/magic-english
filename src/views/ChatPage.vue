@@ -481,6 +481,7 @@ onMounted(() => {
   height: 100vh;
   height: 100dvh;
   background: linear-gradient(180deg, #f8f9ff 0%, #f0f4ff 50%, #e8f0fe 100%);
+  color: var(--text-on-light); /* 浅色背景上使用深色文字，防止继承 body 白色 */
 }
 
 /* 顶部栏 */
@@ -869,6 +870,11 @@ onMounted(() => {
   outline: none;
   transition: border-color 0.2s;
   background: #fafafa;
+  color: #333; /* 浅色背景上显式深色文字 */
+}
+
+.text-input::placeholder {
+  color: #aaa; /* placeholder 也要可见 */
 }
 
 .text-input:focus {

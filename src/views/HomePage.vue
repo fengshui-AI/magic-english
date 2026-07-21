@@ -79,7 +79,7 @@
         <span class="map-subtitle">— 魔法英语大陆 —</span>
       </h2>
 
-      <div class="region-grid">
+      <div class="region-grid" :class="{ 'grade1-grid': isGrade1 }">
         <div
           v-for="region in regions"
           :key="region.id"
@@ -88,6 +88,7 @@
             'region-locked': region.locked,
             'region-current': region.current,
             'region-cleared': region.cleared,
+            'grade1-card': isGrade1,
           }"
           :style="regionCardVars(region)"
           @click="!region.locked && selectRegion(region)"
@@ -136,6 +137,10 @@
          开始学习 — CTA
          ============================================================ -->
     <div class="learn-cta-wrap">
+      <!-- 大图标：小孩不认字也能看懂 -->
+      <div class="cta-icon-wrap" :class="{ 'grade1-cta-icon': isGrade1 }">
+        <span class="cta-big-icon">{{ isGrade1 ? '🎮' : '🚀' }}</span>
+      </div>
       <button class="learn-cta-btn" @click="$router.push('/learn')">
         <span class="cta-sparkle">✨</span>
         <span class="cta-text">
@@ -149,6 +154,26 @@
          今日单词预览
          ============================================================ -->
     <section class="today-preview">
+      <!-- 一年级简化版：无 tab 切换，直接显示今日单词 -->
+      <template v-if="isGrade1">
+        <p class="preview-title-simple">🌟 今天要学的单词</p>
+        <div class="preview-chips grade1-chips">
+          <button
+            v-for="w in newWords.slice(0, 3)"
+            :key="w.wordId"
+            class="word-chip grade1-chip"
+            @click="previewWord(w)"
+          >
+            <span class="chip-emoji">{{ wordEmoji(w.theme) }}</span>
+            <span class="chip-en">{{ w.word }}</span>
+            <span class="chip-cn">{{ w.translation }}</span>
+          </button>
+          <p v-if="!newWords.length" class="empty-hint">今日单词加载中…</p>
+        </div>
+      </template>
+
+      <!-- 高年级：新词/复习 tab -->
+      <template v-else>
       <div class="preview-tabs">
         <button
           :class="{ active: previewTab === 'new' }"
@@ -193,12 +218,13 @@
           <p v-if="!reviewWords.length" class="empty-hint">暂无复习，今天先学新词吧 🌱</p>
         </template>
       </div>
+      </template>
     </section>
 
     <!-- ============================================================
-         教材导航 — 折叠式
+         教材导航 — 折叠式（一年级隐藏）
          ============================================================ -->
-    <section class="book-section">
+    <section v-if="!isGrade1" class="book-section">
       <button class="book-toggle" @click="bookOpen = !bookOpen">
         <span>📖 教材学习 · 人教版</span>
         <span class="toggle-arrow" :class="{ open: bookOpen }">▾</span>
@@ -236,20 +262,18 @@
     <!-- ============================================================
          豆豆伙伴入口
          ============================================================ -->
-    <div class="dodo-entry" @click="$router.push('/pet')">
-      <div class="dodo-card">
+    <div class="dodo-entry" :class="{ 'grade1-dodo': isGrade1 }" @click="$router.push('/pet')">
+      <div class="dodo-card" :class="{ 'grade1-dodo-card': isGrade1 }">
         <DodoEmotion :show-indicators="true" />
         <div class="dodo-text">
-          <span class="dodo-label">去找豆豆玩 →</span>
+          <span class="dodo-label">{{ isGrade1 ? '去找豆豆玩！' : '去找豆豆玩 →' }}</span>
           <span class="dodo-closeness">{{ closenessLabel }}</span>
         </div>
       </div>
     </div>
 
-    <!-- ============================================================
-         花园入口
-         ============================================================ -->
-    <div class="garden-entry" @click="$router.push('/garden')">
+    <!-- 花园入口（高年级可见） -->
+    <div v-if="!isGrade1" class="garden-entry" @click="$router.push('/garden')">
       <div class="garden-entry-card">
         <span class="garden-entry-emoji">🏡</span>
         <div class="garden-entry-text">
@@ -289,6 +313,11 @@ import StreakFlame from '../components/StreakFlame.vue'
 const router = useRouter()
 
 // ============================================================
+// 一年级简化模式
+// ============================================================
+const isGrade1 = computed(() => learningStore.grade === 1)
+
+// ============================================================
 // 区域数据 — 7 个魔法大陆
 // ============================================================
 interface Region {
@@ -307,14 +336,20 @@ interface Region {
   bgColor: string
 }
 
+// 一年级简化版区域描述
+const GRADE1_REGION_DESC: Record<number, string> = {
+  1: '认识字母和单词',
+  2: '学习正确发音',
+  3: '会说更多单词',
+}
+
 const regions = computed<Region[]>(() => {
   const userUnit = learningStore.unit || 1
-  // 用独立的 currentRegionId 跟踪当前关卡，不复用 grade
   const currentRegionId = activeRegionId.value
 
-  return [
+  const allRegions: Region[] = [
     {
-      id: 1, name: '萌芽之森', emoji: '🌱', desc: '英语启蒙之地',
+      id: 1, name: '萌芽之森', emoji: '🌱', desc: isGrade1.value ? (GRADE1_REGION_DESC[1] || '英语启蒙之地') : '英语启蒙之地',
       level: 1, wordCount: 60,
       primaryColor: 'var(--region-l1-primary)',
       secondaryColor: 'var(--region-l1-secondary)',
@@ -322,7 +357,7 @@ const regions = computed<Region[]>(() => {
       ...regionState(1, currentRegionId, userUnit),
     },
     {
-      id: 2, name: '回声山谷', emoji: '🏔️', desc: '聆听与发音',
+      id: 2, name: '回声山谷', emoji: '🏔️', desc: isGrade1.value ? (GRADE1_REGION_DESC[2] || '聆听与发音') : '聆听与发音',
       level: 2, wordCount: 80,
       primaryColor: 'var(--region-l2-primary)',
       secondaryColor: 'var(--region-l2-secondary)',
@@ -330,7 +365,7 @@ const regions = computed<Region[]>(() => {
       ...regionState(2, currentRegionId, userUnit),
     },
     {
-      id: 3, name: '闪耀之海', emoji: '🌊', desc: '单词的海洋',
+      id: 3, name: '闪耀之海', emoji: '🌊', desc: isGrade1.value ? (GRADE1_REGION_DESC[3] || '单词的海洋') : '单词的海洋',
       level: 3, wordCount: 100,
       primaryColor: 'var(--region-l3-primary)',
       secondaryColor: 'var(--region-l3-secondary)',
@@ -370,6 +405,12 @@ const regions = computed<Region[]>(() => {
       ...regionState(7, currentRegionId, userUnit),
     },
   ]
+
+  // 一年级只显示前 3 个区域
+  if (isGrade1.value) {
+    return allRegions.slice(0, 3)
+  }
+  return allRegions
 })
 
 // 当前活跃的关卡 ID（默认为用户年级对应的关卡）
@@ -1061,6 +1102,29 @@ onMounted(() => {
   z-index: var(--z-above);
 }
 
+/* CTA 大图标 */
+.cta-icon-wrap {
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.cta-big-icon {
+  font-size: 48px;
+  display: inline-block;
+  animation: cta-bounce 1.5s ease-in-out infinite;
+  filter: drop-shadow(0 4px 12px rgba(107, 92, 231, 0.3));
+}
+
+@keyframes cta-bounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-6px) scale(1.08); }
+}
+
+/* 一年级图标更大 */
+.cta-icon-wrap.grade1-cta-icon .cta-big-icon {
+  font-size: 64px;
+}
+
 .learn-cta-btn {
   display: flex;
   align-items: center;
@@ -1311,6 +1375,11 @@ onMounted(() => {
   transform: translateY(-2px);
 }
 
+/* 确保 DodoEmotion 不阻止父级点击事件 */
+.dodo-card :deep(.dodo-emotion) {
+  pointer-events: none;
+}
+
 .dodo-text { flex: 1; }
 .dodo-label {
   font-size: var(--text-base);
@@ -1422,4 +1491,82 @@ onMounted(() => {
 
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+/* ============================================================
+   一年级简化模式样式
+   ============================================================ */
+
+/* 单列大卡片网格 */
+.region-grid.grade1-grid {
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.region-card.grade1-card {
+  min-height: 140px;
+  padding: 20px 18px;
+}
+
+.region-card.grade1-card .region-emoji {
+  font-size: 40px;
+}
+
+.region-card.grade1-card .region-name {
+  font-size: var(--text-lg);
+}
+
+.region-card.grade1-card .region-desc {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+/* 一年级简化单词预览标题 */
+.preview-title-simple {
+  font-size: var(--text-base);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  margin: 0 0 10px;
+}
+
+/* 一年级大 chip */
+.word-chip.grade1-chip {
+  padding: 12px 16px;
+  gap: 10px;
+  width: 100%;
+  border-radius: var(--radius-xl);
+  font-size: var(--text-base);
+}
+
+.word-chip.grade1-chip .chip-emoji {
+  font-size: 24px;
+}
+
+.word-chip.grade1-chip .chip-en {
+  font-size: var(--text-lg);
+}
+
+.word-chip.grade1-chip .chip-cn {
+  font-size: var(--text-base);
+}
+
+.grade1-chips {
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 一年级豆豆入口增强 */
+.dodo-entry.grade1-dodo {
+  padding: 12px 16px 20px;
+}
+
+.dodo-card.grade1-dodo-card {
+  padding: 20px;
+  gap: 20px;
+  background: linear-gradient(135deg, rgba(107, 92, 231, 0.18), rgba(255, 107, 157, 0.18));
+  border: 2px solid rgba(255, 255, 255, 0.12);
+}
+
+.dodo-card.grade1-dodo-card .dodo-label {
+  font-size: var(--text-lg);
+}
 </style>

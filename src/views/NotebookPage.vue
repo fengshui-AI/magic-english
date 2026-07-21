@@ -24,6 +24,15 @@
     <div class="stats-section">
       <!-- 统计 -->
       <div class="stats-row">
+        <!-- 一年级：只显示已收集 -->
+        <template v-if="isGrade1">
+          <div class="stat-card grade1-stat">
+            <span class="stat-num grade1-num">{{ filteredWords.length }}</span>
+            <span class="stat-label grade1-label">个单词已收集 ✨</span>
+          </div>
+        </template>
+        <!-- 高年级：3 个统计卡片 -->
+        <template v-else>
         <div class="stat-card">
           <span class="stat-num">{{ filteredWords.length }}</span>
           <span class="stat-label">已收集</span>
@@ -36,9 +45,11 @@
           <span class="stat-num">{{ learningCount }}</span>
           <span class="stat-label">学习中</span>
         </div>
+        </template>
       </div>
 
-      <!-- 稀有度分布 -->
+      <!-- 稀有度分布（一年级隐藏） -->
+      <template v-if="!isGrade1">
       <div class="rarity-bar">
         <div
           v-for="r in rarityStats"
@@ -55,18 +66,26 @@
           {{ r.name }} {{ r.count }}
         </span>
       </div>
+      </template>
     </div>
 
     <!-- ============================================================
          筛选栏
          ============================================================ -->
     <div class="filter-bar">
-      <div class="filter-scroll">
+      <div class="filter-scroll" :class="{ 'grade1-filters': isGrade1 }">
         <button
           class="filter-chip"
           :class="{ active: activeTheme === 'all' }"
           @click="activeTheme = 'all'"
         >全部</button>
+        <template v-if="isGrade1">
+          <!-- 一年级：仅 3 个主题 -->
+          <button class="filter-chip" :class="{ active: activeTheme === 'animal' }" @click="activeTheme = 'animal'">🐱 动物</button>
+          <button class="filter-chip" :class="{ active: activeTheme === 'food' }" @click="activeTheme = 'food'">🍕 美食</button>
+          <button class="filter-chip" :class="{ active: activeTheme === 'school' }" @click="activeTheme = 'school'">📚 学校</button>
+        </template>
+        <template v-else>
         <button
           v-for="theme in themes"
           :key="theme.id"
@@ -74,13 +93,16 @@
           :class="{ active: activeTheme === theme.id }"
           @click="activeTheme = theme.id"
         >{{ theme.icon }} {{ theme.name }}</button>
+        </template>
       </div>
 
-      <div class="sort-row">
+      <div class="sort-row" :class="{ 'grade1-sort': isGrade1 }">
         <button :class="{ active: sortBy === 'recent' }" @click="sortBy = 'recent'">🕐 最近</button>
-        <button :class="{ active: sortBy === 'alphabet' }" @click="sortBy = 'alphabet'">🔤 字母</button>
         <button :class="{ active: sortBy === 'mastery' }" @click="sortBy = 'mastery'">⭐ 掌握度</button>
+        <template v-if="!isGrade1">
+        <button :class="{ active: sortBy === 'alphabet' }" @click="sortBy = 'alphabet'">🔤 字母</button>
         <button :class="{ active: sortBy === 'rarity' }" @click="sortBy = 'rarity'">💎 稀有度</button>
+        </template>
       </div>
     </div>
 
@@ -88,20 +110,23 @@
          卡牌网格
          ============================================================ -->
     <div class="card-grid">
-      <transition-group name="card-list" tag="div" class="grid-wrap">
+      <transition-group name="card-list" tag="div" class="grid-wrap" :class="{ 'grade1-grid': isGrade1 }">
         <div
           v-for="word in sortedWords"
           :key="word.id"
           class="word-card"
-          :class="'rarity-' + getRarity(word.mastery)"
+          :class="[
+            'rarity-' + getRarity(word.mastery),
+            { 'grade1-word-card': isGrade1 }
+          ]"
           :style="cardGlow(word.mastery)"
           @click="openDetail(word)"
         >
-          <!-- 稀有度边框光效 -->
-          <div class="card-border-glow" />
+          <!-- 稀有度边框光效（一年级隐藏） -->
+          <div v-if="!isGrade1" class="card-border-glow" />
 
-          <!-- 稀有度角标 -->
-          <div class="rarity-badge" :class="'rarity-' + getRarity(word.mastery)">
+          <!-- 稀有度角标（一年级隐藏） -->
+          <div v-if="!isGrade1" class="rarity-badge" :class="'rarity-' + getRarity(word.mastery)">
             {{ rarityIcon(word.mastery) }}
           </div>
 
@@ -112,8 +137,8 @@
             <span class="card-meaning">{{ word.meaning }}</span>
           </div>
 
-          <!-- 底部掌握条 -->
-          <div class="card-mastery">
+          <!-- 底部掌握条（一年级始终可见） -->
+          <div class="card-mastery" :class="{ 'grade1-always-show': isGrade1 }">
             <div class="card-mastery-bar">
               <div
                 class="card-mastery-fill"
@@ -149,12 +174,12 @@
 
           <!-- 头部 -->
           <div class="detail-header">
-            <span class="detail-rarity-badge" :class="'rarity-' + getRarity(detailWord.mastery)">
+            <span v-if="!isGrade1" class="detail-rarity-badge" :class="'rarity-' + getRarity(detailWord.mastery)">
               {{ rarityName(detailWord.mastery) }}
             </span>
             <span class="detail-emoji">{{ detailWord.emoji }}</span>
             <h2 class="detail-word">{{ detailWord.word }}</h2>
-            <p class="detail-phonetic">{{ detailWord.phonetic || '/fəˈnetɪk/' }}</p>
+            <p v-if="!isGrade1" class="detail-phonetic">{{ detailWord.phonetic || '/fəˈnetɪk/' }}</p>
           </div>
 
           <!-- 内容 -->
@@ -186,11 +211,11 @@
               <p class="mastery-tip">{{ masteryTip }}</p>
             </div>
 
-            <div class="detail-actions">
-              <button class="action-btn" @click="playWord(detailWord)">
+            <div class="detail-actions" :class="{ 'grade1-actions': isGrade1 }">
+              <button class="action-btn" :class="{ 'grade1-action-btn': isGrade1 }" @click="playWord(detailWord)">
                 <span>🔊</span> 听发音
               </button>
-              <button class="action-btn primary" @click="practiceWord(detailWord)">
+              <button class="action-btn primary" :class="{ 'grade1-action-btn': isGrade1 }" @click="practiceWord(detailWord)">
                 <span>🎤</span> 练习发音
               </button>
             </div>
@@ -210,11 +235,15 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { fetchWords, fetchTopics } from '../stores/words'
+import { learningStore } from '../stores/learning'
 
 const router = useRouter()
 const toast = ref('')
 const loading = ref(true)
 const error = ref<string | null>(null)
+
+// 一年级简化模式
+const isGrade1 = computed(() => learningStore.grade === 1)
 
 interface NotebookWord {
   id: string
@@ -774,4 +803,74 @@ onMounted(async () => {
 
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+/* ============================================================
+   一年级简化模式样式
+   ============================================================ */
+
+/* 统计卡片 */
+.stat-card.grade1-stat {
+  padding: 16px;
+}
+.stat-num.grade1-num {
+  font-size: 36px;
+  color: var(--color-accent);
+}
+.stat-label.grade1-label {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+}
+
+/* 筛选栏 */
+.filter-scroll.grade1-filters {
+  gap: 10px;
+}
+.filter-scroll.grade1-filters .filter-chip {
+  padding: 10px 18px;
+  font-size: var(--text-base);
+}
+
+.sort-row.grade1-sort button {
+  font-size: var(--text-sm);
+  padding: 10px;
+}
+
+/* 卡牌网格 2 列 */
+.grid-wrap.grade1-grid {
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.word-card.grade1-word-card {
+  aspect-ratio: auto;
+  min-height: 140px;
+  padding: 14px 10px;
+}
+
+.word-card.grade1-word-card .card-emoji {
+  font-size: 36px;
+}
+.word-card.grade1-word-card .card-word {
+  font-size: var(--text-base);
+}
+.word-card.grade1-word-card .card-meaning {
+  font-size: var(--text-sm);
+}
+
+/* 掌握条常显 */
+.card-mastery.grade1-always-show {
+  opacity: 1;
+  padding: 6px 8px;
+  background: rgba(0,0,0,0.6);
+}
+
+/* 弹窗按钮加大 */
+.detail-actions.grade1-actions {
+  gap: 12px;
+}
+.action-btn.grade1-action-btn {
+  padding: 16px;
+  font-size: var(--text-base);
+  border-radius: var(--radius-xl);
+}
 </style>
