@@ -1,7 +1,7 @@
 {
   "pages": [
-    "pages/login/login",
     "pages/home/home",
+    "pages/login/login",
     "pages/learn/learn",
     "pages/journal/journal",
     "pages/pet/pet",
@@ -14,32 +14,6 @@
     "navigationBarTitleText": "豆语星球",
     "navigationBarTextStyle": "white",
     "backgroundColor": "#0f0f23"
-  },
-  "tabBar": {
-    "color": "#8b8ba7",
-    "selectedColor": "#7c5ce7",
-    "backgroundColor": "#1a1a2e",
-    "borderStyle": "black",
-    "list": [
-      {
-        "pagePath": "pages/home/home",
-        "text": "星球",
-        "iconPath": "images/tab-home.png",
-        "selectedIconPath": "images/tab-home-active.png"
-      },
-      {
-        "pagePath": "pages/learn/learn",
-        "text": "学习",
-        "iconPath": "images/tab-learn.png",
-        "selectedIconPath": "images/tab-learn-active.png"
-      },
-      {
-        "pagePath": "pages/journal/journal",
-        "text": "手账本",
-        "iconPath": "images/tab-journal.png",
-        "selectedIconPath": "images/tab-journal-active.png"
-      }
-    ]
   },
   "style": "v2",
   "sitemapLocation": "sitemap.json",

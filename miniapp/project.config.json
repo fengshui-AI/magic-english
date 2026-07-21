@@ -2,8 +2,14 @@
   "description": "豆语星球 - 儿童英语陪伴小程序",
   "packOptions": {
     "ignore": [
-      { "type": "file", "value": ".eslintrc.js" },
-      { "type": "file", "value": ".gitignore" }
+      {
+        "value": ".eslintrc.js",
+        "type": "file"
+      },
+      {
+        "value": ".gitignore",
+        "type": "file"
+      }
     ],
     "include": []
   },
@@ -40,7 +46,14 @@
       "ignore": [],
       "disablePlugins": [],
       "outputPath": ""
-    }
+    },
+    "compileWorklet": false,
+    "localPlugins": false,
+    "disableUseStrict": false,
+    "useCompilerPlugins": false,
+    "condition": false,
+    "swc": false,
+    "disableSWC": true
   },
   "compileType": "miniprogram",
   "libVersion": "3.5.5",
@@ -50,5 +63,6 @@
   "editorSetting": {
     "tabIndent": "insertSpaces",
     "tabSize": 2
-  }
+  },
+  "simulatorPluginLibVersion": {}
 }
