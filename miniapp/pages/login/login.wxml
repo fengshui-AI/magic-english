@@ -2,7 +2,7 @@
 <view class="container flex-col flex-center">
   <!-- Logo 区域 -->
   <view class="logo-area">
-    <image class="logo" src="/images/logo.png" mode="aspectFit" />
+    <view class="logo-icon">🪐</view>
     <text class="title">豆语星球</text>
     <text class="subtitle">每天10分钟，和豆豆说英语</text>
   </view>

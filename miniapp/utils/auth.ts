@@ -29,23 +29,23 @@ async function wechatLogin(): Promise<LoginResult> {
   );
 
   // 2. 发送到后端
-  const result = await post<ApiResponse<LoginResult>>('/api/auth/wechat-login', {
+  const result = await post<LoginResult>('/api/v1/auth/wechat-login', {
     code: loginRes.code
   });
 
-  if (result.code !== 0 || !result.data) {
-    throw new Error(result.message || '登录失败');
+  if (!result || !result.token) {
+    throw new Error('登录失败：服务端返回异常');
   }
 
   // 3. 存储 token
-  wx.setStorageSync('token', result.data.token);
+  wx.setStorageSync('token', result.token);
 
   // 4. 存储用户信息
   const app = getApp<IAppOption>();
-  app.globalData.token = result.data.token;
-  app.globalData.userInfo = result.data.user;
+  app.globalData.token = result.token;
+  app.globalData.userInfo = result.user;
 
-  return result.data;
+  return result;
 }
 
 /**

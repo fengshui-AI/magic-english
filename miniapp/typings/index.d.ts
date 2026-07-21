@@ -1,13 +1,17 @@
 /// <reference path="./wx.d.ts" />
 
-/** 用户信息 */
+/** 用户信息（匹配后端 users 表） */
 interface UserInfo {
-  id: number;
-  openid: string;
-  nickname: string;
-  avatarUrl: string;
-  /** 豆豆名字 */
-  dodoName: string;
+  id: string;
+  phone?: string;
+  role: 'child' | 'parent';
+  name?: string;
+  ageSegment?: 'low' | 'mid' | 'high';
+  grade?: number;
+  avatarUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  lastLoginAt?: string;
 }
 
 /** API 统一响应 */

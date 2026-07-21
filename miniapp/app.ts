@@ -14,15 +14,17 @@ App<IAppOption>({
   },
 
   onLaunch() {
-    // 检查登录状态
-    const token = wx.getStorageSync('token');
-    if (token) {
-      this.globalData.token = token;
-    }
-
     // 获取系统信息
     const systemInfo = wx.getSystemInfoSync();
     this.globalData.systemInfo = systemInfo;
+
+    // 检查登录状态：无 token → 跳转登录页
+    const token = wx.getStorageSync('token');
+    if (token) {
+      this.globalData.token = token;
+    } else {
+      wx.reLaunch({ url: '/pages/login/login' });
+    }
   },
 
   onShow() {

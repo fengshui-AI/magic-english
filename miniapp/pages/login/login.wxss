@@ -13,12 +13,10 @@
   margin-bottom: 120rpx;
 }
 
-.logo {
-  width: 160rpx;
-  height: 160rpx;
-  border-radius: var(--radius-lg);
-  margin-bottom: 32rpx;
-  box-shadow: 0 0 40rpx rgba(124, 92, 231, 0.3);
+.logo-icon {
+  font-size: 120rpx;
+  margin-bottom: 24rpx;
+  filter: drop-shadow(0 0 40rpx rgba(124, 92, 231, 0.3));
 }
 
 .title {
