@@ -1,0 +1,21 @@
+<!-- 宠物家园 -->
+<view class="container flex-center">
+  <!-- 豆豆展示区 -->
+  <view class="dodo-stage">
+    <text class="dodo-emoji">🐣</text>
+    <text class="dodo-name text-lg text-bold mt-md">Lv.{{dodoStatus.level}} 豆豆</text>
+    <text class="text-sm text-secondary">{{dodoStatus.mood}}</text>
+  </view>
+
+  <!-- 经验条 -->
+  <view class="exp-bar mt-md">
+    <view class="exp-fill" style="width: {{dodoStatus.exp}}%"></view>
+  </view>
+  <text class="text-xs text-muted text-center mt-sm">EXP {{dodoStatus.exp}}/100</text>
+
+  <!-- 操作按钮 -->
+  <view class="actions mt-lg">
+    <button class="btn btn-primary" bindtap="handleFeed">🍎 喂食</button>
+    <button class="btn btn-outline mt-sm" bindtap="handleOutfit">👗 装扮</button>
+  </view>
+</view>

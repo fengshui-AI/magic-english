@@ -1,0 +1,49 @@
+<!-- 学习页 - 核心对话界面 -->
+<view class="container">
+  <!-- 顶部进度条 -->
+  <view class="progress-bar">
+    <view class="progress-fill" style="width: {{progress.learned / progress.total * 100}}%"></view>
+  </view>
+  <text class="progress-text text-xs text-secondary text-center">
+    今日进度 {{progress.learned}}/{{progress.total}}
+  </text>
+
+  <!-- 对话区域 -->
+  <scroll-view class="chat-area" scroll-y scroll-into-view="msg-{{messages.length - 1}}">
+    <view
+      wx:for="{{messages}}"
+      wx:key="index"
+      id="msg-{{index}}"
+      class="msg {{item.role}}"
+    >
+      <text class="msg-avatar">{{item.role === 'dodo' ? '🐣' : '👦'}}</text>
+      <view class="msg-bubble {{item.role}}">
+        <text>{{item.text}}</text>
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 底部输入栏 -->
+  <view class="input-bar">
+    <!-- 语音按钮 -->
+    <view class="voice-btn {{recording ? 'recording' : ''}}" bindtap="handleRecord">
+      <text>🎤</text>
+    </view>
+
+    <!-- 文字输入 -->
+    <input
+      class="text-input"
+      placeholder="和豆豆聊天…"
+      value="{{inputValue}}"
+      bindinput="handleInput"
+      confirm-type="send"
+      bindconfirm="handleSend"
+      auto-focus
+    />
+
+    <!-- 发送按钮 -->
+    <view class="send-btn" bindtap="handleSend">
+      <text>发送</text>
+    </view>
+  </view>
+</view>

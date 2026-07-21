@@ -1,0 +1,59 @@
+/** 星球地图首页样式 */
+
+.header {
+  padding: 40rpx 0 20rpx;
+}
+
+.greeting {
+  display: block;
+  margin-bottom: 8rpx;
+}
+
+.dodo-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 28rpx 32rpx;
+  border: 1rpx solid var(--color-accent-glow);
+}
+
+.dodo-mood {
+  font-size: 64rpx;
+  margin-right: 24rpx;
+}
+
+.dodo-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.today-card {
+  padding: 32rpx;
+}
+
+.start-btn {
+  width: 100%;
+  margin-top: 48rpx;
+  padding: 28rpx 0;
+  font-size: 34rpx;
+}
+
+.entry-grid {
+  display: flex;
+  flex-direction: row;
+  gap: 24rpx;
+}
+
+.entry-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32rpx 16rpx;
+}
+
+.entry-icon {
+  font-size: 48rpx;
+  margin-bottom: 12rpx;
+}

@@ -1,0 +1,10 @@
+/** 设置页样式 */
+
+.section {
+  margin-bottom: 8rpx;
+}
+
+.version {
+  display: block;
+  padding: 40rpx 0;
+}

@@ -1,0 +1,47 @@
+<!-- 星球地图首页 -->
+<view class="container">
+  <!-- 顶部问候 -->
+  <view class="header">
+    <text class="greeting text-lg">你好，{{userName}}！</text>
+    <text class="subtitle text-sm text-secondary">豆豆在等你哦 ⚡</text>
+  </view>
+
+  <!-- 豆豆状态卡片 -->
+  <view class="dodo-card card card-glow" bindtap="handleEnterPet">
+    <text class="dodo-mood">😊</text>
+    <view class="dodo-info">
+      <text class="text-md text-bold">Lv.{{dodoStatus.level}} 豆豆</text>
+      <text class="text-sm text-secondary">心情：{{dodoStatus.mood}}</text>
+    </view>
+  </view>
+
+  <!-- 今日学习 -->
+  <view class="today-card card mt-md">
+    <text class="text-lg text-bold mb-sm">今日学习</text>
+    <view class="flex-between">
+      <text class="text-secondary">已学单词</text>
+      <text class="text-accent text-bold">{{todayCount}} 个</text>
+    </view>
+    <view class="flex-between mt-sm">
+      <text class="text-secondary">累计单词</text>
+      <text class="text-bold">{{totalWords}} 个</text>
+    </view>
+  </view>
+
+  <!-- 开始学习按钮 -->
+  <button class="btn btn-primary start-btn mt-lg" bindtap="handleStartLearn">
+    开始学习
+  </button>
+
+  <!-- 入口区 -->
+  <view class="entry-grid mt-lg">
+    <view class="entry-item card" bindtap="handleEnterPet">
+      <text class="entry-icon">🏠</text>
+      <text class="text-sm">宠物家园</text>
+    </view>
+    <view class="entry-item card" bindtap="handleEnterParent">
+      <text class="entry-icon">📊</text>
+      <text class="text-sm">成长记录</text>
+    </view>
+  </view>
+</view>
