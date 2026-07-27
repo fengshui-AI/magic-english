@@ -1,0 +1,42 @@
+<!-- 家长面板 -->
+<view class="container">
+  <text class="text-lg text-bold">成长记录</text>
+
+  <!-- 本周概览 -->
+  <view class="card mt-md">
+    <text class="text-md text-bold mb-sm">本周学习概览</text>
+    <view class="stats-grid">
+      <view class="stat-item">
+        <text class="stat-value text-xl text-accent">{{weekReport.daysStudied}}</text>
+        <text class="stat-label text-xs text-secondary">学习天数</text>
+      </view>
+      <view class="stat-item">
+        <text class="stat-value text-xl text-accent">{{weekReport.newWords}}</text>
+        <text class="stat-label text-xs text-secondary">新单词</text>
+      </view>
+      <view class="stat-item">
+        <text class="stat-value text-xl text-accent">{{weekReport.totalMinutes}}</text>
+        <text class="stat-label text-xs text-secondary">分钟</text>
+      </view>
+      <view class="stat-item">
+        <text class="stat-value text-xl text-star">{{weekReport.streakDays}}</text>
+        <text class="stat-label text-xs text-secondary">连续天数</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 操作入口 -->
+  <view class="card mt-md" bindtap="handleViewReport">
+    <view class="flex-between">
+      <text>查看详细报告</text>
+      <text class="text-secondary">→</text>
+    </view>
+  </view>
+
+  <view class="card mt-sm" bindtap="handleSettings">
+    <view class="flex-between">
+      <text>学习设置</text>
+      <text class="text-secondary">→</text>
+    </view>
+  </view>
+</view>

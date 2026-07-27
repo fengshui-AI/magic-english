@@ -1,0 +1,149 @@
+/** 豆语星球 全局样式 - Linear 冷峻极简深色风格 */
+
+/* ========== 设计变量 ========== */
+page {
+  --color-bg-primary: #0f0f23;
+  --color-bg-secondary: #1a1a2e;
+  --color-bg-card: #16213e;
+  --color-bg-elevated: #1f2b47;
+  --color-accent: #7c5ce7;
+  --color-accent-light: #a78bfa;
+  --color-accent-glow: rgba(124, 92, 231, 0.25);
+  --color-text-primary: #e8e8f0;
+  --color-text-secondary: #8b8ba7;
+  --color-text-muted: #5a5a7a;
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
+  --color-error: #f87171;
+  --color-star: #f7c948;
+
+  --radius-sm: 8rpx;
+  --radius-md: 12rpx;
+  --radius-lg: 20rpx;
+  --radius-full: 9999rpx;
+
+  --shadow-sm: 0 2rpx 8rpx rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4rpx 16rpx rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 20rpx var(--color-accent-glow);
+
+  --font-xs: 22rpx;
+  --font-sm: 26rpx;
+  --font-md: 30rpx;
+  --font-lg: 36rpx;
+  --font-xl: 44rpx;
+
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: var(--font-md);
+  line-height: 1.6;
+  box-sizing: border-box;
+}
+
+/* ========== 通用工具类 ========== */
+.container {
+  min-height: 100vh;
+  padding: 24rpx;
+  box-sizing: border-box;
+}
+
+.card {
+  background: var(--color-bg-card);
+  border-radius: var(--radius-lg);
+  padding: 32rpx;
+  box-shadow: var(--shadow-sm);
+}
+
+.card-glow {
+  box-shadow: var(--shadow-glow);
+}
+
+/* 按钮 */
+.btn {
+  padding: 16rpx 48rpx;
+  border-radius: var(--radius-full);
+  font-size: var(--font-md);
+  font-weight: 600;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--color-accent), var(--color-accent-light));
+  color: #ffffff;
+}
+
+.btn-primary:active {
+  opacity: 0.85;
+  transform: scale(0.97);
+}
+
+.btn-outline {
+  border: 2rpx solid var(--color-accent);
+  color: var(--color-accent);
+  background: transparent;
+}
+
+.btn-ghost {
+  color: var(--color-text-secondary);
+  background: transparent;
+}
+
+/* 文字 */
+.text-accent { color: var(--color-accent); }
+.text-muted { color: var(--color-text-muted); }
+.text-secondary { color: var(--color-text-secondary); }
+.text-xs { font-size: var(--font-xs); }
+.text-sm { font-size: var(--font-sm); }
+.text-md { font-size: var(--font-md); }
+.text-lg { font-size: var(--font-lg); }
+.text-xl { font-size: var(--font-xl); }
+.text-bold { font-weight: 700; }
+.text-center { text-align: center; }
+
+/* 间距 */
+.mt-sm { margin-top: 16rpx; }
+.mt-md { margin-top: 32rpx; }
+.mt-lg { margin-top: 48rpx; }
+.mb-sm { margin-bottom: 16rpx; }
+.mb-md { margin-bottom: 32rpx; }
+.p-md { padding: 32rpx; }
+
+/* Flex */
+.flex-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+.flex-col {
+  display: flex;
+  flex-direction: column;
+}
+.flex-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.flex-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.flex-1 { flex: 1; }
+
+/* 分隔线 */
+.divider {
+  height: 2rpx;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 24rpx 0;
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80rpx 0;
+  color: var(--color-text-muted);
+}

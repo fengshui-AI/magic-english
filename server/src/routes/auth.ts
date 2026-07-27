@@ -33,6 +33,10 @@ const loginSchema = z.object({
 
 export type LoginBody = z.infer<typeof loginSchema>
 
+const wechatLoginSchema = z.object({
+  code: z.string().min(1),
+})
+
 // ============================================================
 // 密码工具
 // ============================================================
@@ -72,12 +76,42 @@ function signToken(userId: string, role: string): string {
 }
 
 // ============================================================
+// 微信 API 工具
+// ============================================================
+
+interface WechatSessionResponse {
+  openid?: string
+  session_key?: string
+  errcode?: number
+  errmsg?: string
+}
+
+async function code2Session(code: string): Promise<WechatSessionResponse> {
+  const appId = process.env.WECHAT_APPID
+  const appSecret = process.env.WECHAT_APPSECRET
+
+  if (!appId || !appSecret) {
+    throw new Error('WECHAT_APPID and WECHAT_APPSECRET must be set in environment')
+  }
+
+  const url = `https://api.weixin.qq.com/sns/jscode2session?appid=${appId}&secret=${appSecret}&js_code=${code}&grant_type=authorization_code`
+
+  const resp = await fetch(url)
+  const data: WechatSessionResponse = await resp.json()
+
+  if (data.errcode) {
+    throw new Error(`微信登录失败：${data.errmsg || '未知错误'} (code: ${data.errcode})`)
+  }
+
+  return data
+}
+
+// ============================================================
 // POST /api/v1/auth/register — 注册
 // ============================================================
 authRoutes.post('/register', validateBody(registerSchema), async (req: Request, res: Response) => {
   const body = getValidatedBody<RegisterBody>(req)
 
-  // Child 角色必须有 ageSegment
   if (body.role === 'child' && !body.ageSegment) {
     res.status(400).json({ error: 'Child registration requires ageSegment' })
     return
@@ -130,13 +164,11 @@ authRoutes.post('/login', validateBody(loginSchema), async (req: Request, res: R
     return
   }
 
-  // 验证密码
   if (!user.passwordHash) {
-    // 老用户没有密码，不允许用密码登录，提示设置密码
     res.status(401).json({ error: 'Account needs password setup. Please contact support.' })
     return
   }
-  
+
   if (!verifyPassword(body.password, user.passwordHash)) {
     res.status(401).json({ error: 'Invalid password' })
     return
@@ -146,6 +178,92 @@ authRoutes.post('/login', validateBody(loginSchema), async (req: Request, res: R
 
   const token = signToken(user.id, user.role)
   res.json({ user, token })
+})
+
+// ============================================================
+// POST /api/v1/auth/wechat-login — 微信小程序登录
+// 流程：code → openid → 查/建用户 → JWT
+// ============================================================
+authRoutes.post('/wechat-login', validateBody(wechatLoginSchema), async (req: Request, res: Response) => {
+  try {
+    const { code } = getValidatedBody<{ code: string }>(req)
+
+    // 1. 调用微信 API 获取 openid
+    const session = await code2Session(code)
+    const openid = session.openid!
+    const sessionKey = session.session_key
+
+    // 2. 查现有用户
+    let [existingUser] = await db
+      .select({
+        id: users.id,
+        phone: users.phone,
+        role: users.role,
+        name: users.name,
+        ageSegment: users.ageSegment,
+        grade: users.grade,
+        avatarUrl: users.avatarUrl,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+        lastLoginAt: users.lastLoginAt,
+        wxOpenid: users.wxOpenid,
+      })
+      .from(users)
+      .where(eq(users.wxOpenid, openid))
+      .limit(1)
+
+    let isNewUser = false
+
+    if (!existingUser) {
+      // 3. 新用户：创建账号
+      const [newUser] = await db
+        .insert(users)
+        .values({
+          wxOpenid: openid,
+          role: 'child',
+          name: '小探险家',
+          grade: 3,
+          ageSegment: 'mid',
+        })
+        .returning({
+          id: users.id,
+          phone: users.phone,
+          role: users.role,
+          name: users.name,
+          ageSegment: users.ageSegment,
+          grade: users.grade,
+          avatarUrl: users.avatarUrl,
+          createdAt: users.createdAt,
+          updatedAt: users.updatedAt,
+          lastLoginAt: users.lastLoginAt,
+          wxOpenid: users.wxOpenid,
+        })
+
+      existingUser = newUser
+      isNewUser = true
+
+      console.log(`🆕 New WeChat user registered: ${openid.substring(0, 8)}...`)
+    } else {
+      // 4. 老用户：更新登录时间
+      await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, existingUser.id))
+      console.log(`👋 Returning WeChat user: ${openid.substring(0, 8)}...`)
+    }
+
+    // 5. 签发 JWT
+    const token = signToken(existingUser.id, existingUser.role)
+
+    // 不暴露 session_key 和 wxOpenid 给前端
+    const { wxOpenid, ...safeUser } = existingUser
+
+    res.json({
+      user: safeUser,
+      token,
+      isNewUser,
+    })
+  } catch (err) {
+    console.error('WeChat login error:', err)
+    res.status(500).json({ error: '微信登录失败，请重试' })
+  }
 })
 
 // ============================================================

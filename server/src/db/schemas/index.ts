@@ -23,6 +23,7 @@ export const users = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     phone: varchar('phone', { length: 20 }).unique(),
     passwordHash: varchar('password_hash', { length: 255 }),
+    wxOpenid: varchar('wx_openid', { length: 64 }).unique(),
     role: varchar('role', { length: 10 }).notNull().default('child'),
     name: varchar('name', { length: 50 }),
     ageSegment: varchar('age_segment', { length: 10 }),
@@ -35,6 +36,7 @@ export const users = pgTable(
   (table) => ({
     roleIdx: index('idx_users_role').on(table.role),
     ageSegIdx: index('idx_users_age_segment').on(table.ageSegment),
+    wxOpenidIdx: index('idx_users_wx_openid').on(table.wxOpenid),
   }),
 )
 
@@ -333,8 +335,6 @@ export const dialogueSessions = pgTable(
 
 // ============================================================
 // 14. starlight_records — 星光流水表
-// 用途：记录每笔星光获取/消耗，前端不展示数字
-// 每日上限：低段20/中段30/高段40
 // ============================================================
 export const starlightRecords = pgTable(
   'starlight_records',
