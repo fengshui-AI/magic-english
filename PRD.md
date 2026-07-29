@@ -3444,13 +3444,13 @@ Vue Web App   微信小程序         Flutter App
 
 | 小程序页面 | 对应 Vue Web App 页面 | 优先级 | 状态 |
 |-----------|----------------------|--------|------|
-| 登录/注册页 | LoginPage.vue | P0 | ❌ |
-| 星球首页（地图） | StarMapPage.vue | P0 | ❌ |
-| 学习页（对话+单词） | LearningPage.vue | P0 | ❌ |
-| 手账本 | JournalPage.vue | P0 | ❌ |
-| 宠物家园 | GrowthPage.vue | P1 | ❌ |
-| 家长面板 | ParentPage.vue | P1 | ❌ |
-| 个人设置 | SettingsPage.vue | P2 | ❌ |
+| 登录/注册页 | LoginPage.vue | P0 | ✅ 已完成（微信登录链路已跑通） |
+| 星球首页（地图） | StarMapPage.vue | P0 | ✅ 骨架完成（可进入、展示豆豆/学习面板，数据待接） |
+| 学习页（对话+单词） | LearningPage.vue | P0 | 🚧 骨架完成（对话 UI 可用，回复仍为模板，待接真实 LLM） |
+| 手账本 | JournalPage.vue | P0 | 🚧 骨架完成（页面可进，数据待接） |
+| 宠物家园 | GrowthPage.vue | P1 | 🚧 骨架完成（页面可进，数据待接） |
+| 家长面板 | ParentPage.vue | P1 | 🚧 骨架完成（页面可进，数据待接） |
+| 个人设置 | SettingsPage.vue | P2 | 🚧 骨架完成（页面可进，数据待接） |
 
 #### 15.4.2 开发顺序
 
@@ -3464,44 +3464,49 @@ Phase 1: 项目骨架       Phase 2: 核心闭环        Phase 3: 辅助功能
 
 #### 15.4.3 Phase 1 验收标准
 
-**做到什么算完成**：小程序能跑起来，用户能登录，API 能通。
+**做到什么算完成**：小程序能跑起来，用户能登录，API 能通。**（✅ 2026-07-29 全部达成）**
 
 具体验收项：
-- [ ] 微信开发者工具安装完成
-- [ ] 小程序项目创建，AppID 配置正确
-- [ ] 基础目录结构搭建（pages / utils / services / components）
-- [ ] 登录页面开发完成（wx.login → 后端验证 → 获取 JWT）
-- [ ] API 封装层完成（统一处理请求/响应/错误/Token 刷新）
-- [ ] 登录态持久化（Token 存储，启动时自动恢复）
-- [ ] 底部 TabBar 配置（星球首页 + 学习 + 手账本）
+- [x] 微信开发者工具安装完成
+- [x] 小程序项目创建，AppID 配置正确
+- [x] 基础目录结构搭建（pages / utils / services / components）
+- [x] 登录页面开发完成（wx.login → 后端验证 → 获取 JWT）
+- [x] API 封装层完成（统一处理请求/响应/错误/Token 刷新）
+- [x] 登录态持久化（Token 存储，启动时自动恢复）
+- [x] 底部 TabBar 配置（星球首页 + 学习 + 手账本）
 
 ---
 
 ### 15.5 后端 API 清单
 
-以下是小程序需要调用的全部 API（均已在 Vue Web App 中调通，不需要后端改动）：
+以下是小程序需要调用的全部 API。⚠️ **实际接口前缀为 `/api/v1/`（非 `/api/`）**，下表已按线上真实路径更新。除微信登录接口外，其余均已在 Vue Web App 中调通。
 
 | 接口 | 方法 | 路径 | 用途 |
 |------|------|------|------|
-| 微信登录 | POST | /api/auth/wechat-login | 小程序 code 换 JWT |
-| 获取用户信息 | GET | /api/users/me | 当前用户信息 |
-| 更新用户信息 | PATCH | /api/users/me | 更新年级/兴趣等设置 |
-| 获取每日计划 | GET | /api/chat/daily-plan | 今日学习内容 |
-| 发送对话消息 | POST | /api/chat/message | LLM 对话 |
-| 获取对话历史 | GET | /api/chat/history | 历史消息 |
-| 提交学习进度 | POST | /api/progress/report | 学习完成上报 |
-| 获取单词详情 | GET | /api/words/:id | 单词信息 |
-| 获取词库列表 | GET | /api/words/themes | 主题词库 |
-| TTS 合成 | POST | /api/voice/tts | 文字转语音 |
-| ASR 识别 | POST | /api/voice/asr | 语音转文字 |
-| SOE 评测 | POST | /api/voice/soe | 口语发音评测 |
-| 豆豆信息 | GET | /api/pets/mine | 当前用户的豆豆 |
-| 喂养豆豆 | POST | /api/pets/feed | 星光喂养 |
-| 装扮列表 | GET | /api/pets/items | 装饰品列表 |
-| 家长周报 | GET | /api/parents/weekly-report | 每周学习报告 |
-| 学习统计 | GET | /api/parents/stats | 学习数据统计 |
+| 微信登录 | POST | /api/v1/auth/wechat-login | 小程序 code 换 JWT |
+| 获取用户信息 | GET | /api/v1/users/me | 当前用户信息 |
+| 更新用户信息 | PATCH | /api/v1/users/me | 更新年级/兴趣等设置 |
+| 获取每日计划 | GET | /api/v1/chat/daily-plan | 今日学习内容 |
+| 发送对话消息 | POST | /api/v1/chat/message | LLM 对话 |
+| 获取对话历史 | GET | /api/v1/chat/history | 历史消息 |
+| 提交学习进度 | POST | /api/v1/progress/report | 学习完成上报 |
+| 获取单词详情 | GET | /api/v1/words/:id | 单词信息 |
+| 获取词库列表 | GET | /api/v1/words/themes | 主题词库 |
+| TTS 合成 | POST | /api/v1/voice/tts | 文字转语音 |
+| ASR 识别 | POST | /api/v1/voice/asr | 语音转文字 |
+| SOE 评测 | POST | /api/v1/voice/soe | 口语发音评测 |
+| 豆豆信息 | GET | /api/v1/pets/mine | 当前用户的豆豆 |
+| 喂养豆豆 | POST | /api/v1/pets/feed | 星光喂养 |
+| 装扮列表 | GET | /api/v1/pets/items | 装饰品列表 |
+| 家长周报 | GET | /api/v1/parents/weekly-report | 每周学习报告 |
+| 学习统计 | GET | /api/v1/parents/stats | 学习数据统计 |
 
-> **新增接口**：`/api/auth/wechat-login` 是小程序专属，需要新建。入参 `{ code: string }`（wx.login 返回的临时凭证），后端调用微信接口换取 openid，返回 JWT Token。
+> **⚠️ 后端实际变更记录（2026-07-29，修正原"不需要后端改动"的说法）**：
+> 为支持小程序微信登录，后端做了以下改动（已上线部署）：
+> 1. **新增接口** `POST /api/v1/auth/wechat-login`：入参 `{ code: string }`（wx.login 返回的临时凭证），后端调用微信 `code2Session` 换取 openid → 查/建用户 → 返回 JWT Token。文件：`server/src/routes/auth.ts`。
+> 2. **数据库变更**：`users` 表新增 `wx_openid` 字段（VARCHAR 64，UNIQUE，带索引），用于关联微信身份。文件：`server/src/db/schemas/index.ts`。
+> 3. **环境变量新增**：`WECHAT_APPID` / `WECHAT_APPSECRET`（见 15.6.3）。
+> 4. **部署方式变更**：CloudBase 云托管由"容器镜像部署"改为"公开 Git 仓库部署"（关联 main 分支，Dockerfile 根目录，端口 3000），并开启自动部署。
 
 ---
 
