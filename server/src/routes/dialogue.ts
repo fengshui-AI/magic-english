@@ -76,9 +76,7 @@ dialogueRoutes.post('/start', validateBody(startSchema), async (req: Request, re
     // 生成开场白
     const greeting = await generateGreeting(grade, streak)
 
-    // 合成开场白语音
-    const tts = await synthesizeSpeech({ text: greeting.text, voice: 'dodo' })
-
+    // 语音合成已改为按需（前端点击朗读时才调 /tts 接口），此处不再同步合成，避免拖慢对话返回
     // 记录到历史
     if (greeting.stage) {
       state.history.push({
@@ -92,8 +90,8 @@ dialogueRoutes.post('/start', validateBody(startSchema), async (req: Request, re
     res.json({
       sessionId: session.id,
       message: greeting,
-      audioUrl: tts.audioUrl,
-      duration: tts.duration,
+      audioUrl: '',
+      duration: 0,
       topic: state.topic,
       targetWords: state.targetWords,
       stage: state.stage,
@@ -155,9 +153,7 @@ dialogueRoutes.post(
 
       const reply: DodoReply = await processChildMessage(state, body.message, grade)
 
-      // 合成回复语音
-      const tts = await synthesizeSpeech({ text: reply.text, voice: 'dodo' })
-
+      // 语音合成已改为按需（前端点击朗读时才调 /tts 接口），此处不再同步合成，避免拖慢对话返回
       // 记录到历史
       state.history.push({
         speaker: 'dodo',
@@ -177,8 +173,8 @@ dialogueRoutes.post(
 
       res.json({
         message: reply,
-        audioUrl: tts.audioUrl,
-        duration: tts.duration,
+        audioUrl: '',
+        duration: 0,
         stage: state.stage,
         childEnglishRatio: Math.round(state.childEnglishRatio * 100),
         turn: state.turn,
@@ -322,7 +318,7 @@ dialogueRoutes.post(
       state.turn = 0
 
       const introText = `Let's talk about ${newTopic.topic}! I love ${newTopic.topic}! What do you think?`
-      const tts = await synthesizeSpeech({ text: introText, voice: 'dodo' })
+      // 语音合成已改为按需（前端点击朗读时才调 /tts 接口），此处不再同步合成，避免拖慢对话返回
 
       state.history.push({
         speaker: 'dodo',
@@ -340,7 +336,7 @@ dialogueRoutes.post(
           animation: 'sparkle',
           stage: 'topic',
         },
-        audioUrl: tts.audioUrl,
+        audioUrl: '',
       })
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Failed to switch topic' })
