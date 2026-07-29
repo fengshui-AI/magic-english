@@ -6,35 +6,22 @@
     <text class="subtitle text-sm text-secondary">豆豆在等你哦 ⚡</text>
   </view>
 
-  <!-- 豆豆状态卡片 -->
+  <!-- 豆豆状态卡片：形象 + 成长时光 + 连胜火焰（无任何数字，遵守 PRD 4.7） -->
   <view class="dodo-card card card-glow" bindtap="handleEnterPet">
-    <text class="dodo-mood">{{dodoEmoji}}</text>
+    <view class="dodo-avatar-wrap">
+      <text class="dodo-mood-emoji">{{dodoEmoji}}</text>
+      <!-- 连胜火焰：只显形态不显天数，档位越高微光越强 -->
+      <text wx:if="{{flameLevel > 0}}" class="dodo-flame {{flameClass}}">{{flameEmoji}}</text>
+    </view>
     <view class="dodo-info">
-      <text class="text-md text-bold">{{dodoStage}}期 · {{dodoName}}</text>
-      <text class="text-sm text-secondary">成长进度：{{dodoProgress}}%</text>
-    </view>
-  </view>
-
-  <!-- 今日学习 -->
-  <view class="today-card card mt-md">
-    <text class="text-lg text-bold mb-sm">今日学习</text>
-    <view class="flex-between">
-      <text class="text-secondary">今日已学</text>
-      <text class="text-accent text-bold">{{todayCount}} 个</text>
-    </view>
-    <view class="flex-between mt-sm">
-      <text class="text-secondary">累计学习</text>
-      <text class="text-bold">{{totalWords}} 个</text>
-    </view>
-    <view class="flex-between mt-sm">
-      <text class="text-secondary">已掌握</text>
-      <text class="text-bold">{{masteredWords}} 个</text>
+      <text class="text-md text-bold">{{dodoName}} · {{dodoStage}}</text>
+      <text class="dodo-mood-text text-sm text-secondary">{{dodoMood}}</text>
     </view>
   </view>
 
   <!-- 开始学习按钮 -->
   <button class="btn btn-primary start-btn mt-lg" bindtap="handleStartLearn">
-    开始学习
+    去找豆豆玩
   </button>
 
   <!-- 入口区 -->

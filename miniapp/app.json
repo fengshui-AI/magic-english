@@ -15,6 +15,26 @@
     "navigationBarTextStyle": "white",
     "backgroundColor": "#0f0f23"
   },
+  "tabBar": {
+    "color": "#8b8ba7",
+    "selectedColor": "#7c5ce7",
+    "backgroundColor": "#1a1a2e",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/home/home",
+        "text": "星球"
+      },
+      {
+        "pagePath": "pages/learn/learn",
+        "text": "学习"
+      },
+      {
+        "pagePath": "pages/journal/journal",
+        "text": "手账本"
+      }
+    ]
+  },
   "style": "v2",
   "sitemapLocation": "sitemap.json",
   "lazyCodeLoading": "requiredComponents"

@@ -1,11 +1,8 @@
 <!-- 学习页 - 核心对话界面 -->
 <view class="container">
-  <!-- 顶部进度条 -->
-  <view class="progress-bar">
-    <view class="progress-fill" style="width: {{progress.learned / progress.total * 100}}%"></view>
-  </view>
-  <text class="progress-text text-xs text-secondary text-center">
-    今日进度 {{progress.learned}}/{{progress.total}}
+  <!-- 顶部：无数字情感化标识（遵守 PRD 4.7 永不展示数字） -->
+  <text class="chat-title text-xs text-secondary text-center">
+    和豆豆一起聊天中 🐣
   </text>
 
   <!-- 对话区域 -->

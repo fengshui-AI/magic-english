@@ -49,12 +49,16 @@ Page({
   /** 当前对话会话 ID */
   sessionId: '' as string,
 
+  /** 是否已追加过告别钩子（防止 farewell 多轮重复追加） */
+  farewellHooked: false,
+
   onLoad() {
     this.startSession();
   },
 
   /** 开始学习会话——调后端 dialogue/start 拿开场白 */
   async startSession() {
+    this.farewellHooked = false;
     this.setData({ thinking: true });
     wx.showLoading({ title: '豆豆来啦…', mask: true });
     try {
@@ -112,8 +116,9 @@ Page({
         sessionId: this.sessionId,
         message: value
       });
+      const newStage = res.stage || this.data.stage;
       this.setData({
-        stage: res.stage || this.data.stage,
+        stage: newStage,
         messages: [...this.data.messages, {
           role: 'dodo' as const,
           text: res.message.text,
@@ -123,6 +128,11 @@ Page({
       });
       // 豆豆回复自动朗读（最新一条）
       this.speakMessage(this.data.messages.length - 1, res.message.text);
+
+      // 进入告别阶段：补一句成长预告留存钩子（PRD 5.4.1/5.2，前端补，不改后端）
+      if (newStage === 'farewell') {
+        this.appendFarewellHook();
+      }
     } catch (err: any) {
       this.setData({
         messages: [...this.data.messages, {
@@ -146,6 +156,24 @@ Page({
   handleRecord() {
     // TODO: Phase 2 后续 - 腾讯云 ASR 语音识别
     wx.showToast({ title: '语音功能开发中', icon: 'none' });
+  },
+
+  /**
+   * 追加告别成长预告钩子（PRD 5.4.1 分镜7 / 5.2）
+   * 让孩子带着"明天豆豆会长大"的期待离开，形成次日回访钩子。
+   * 延迟 1.2s 追加，等豆豆的告别语先播完，节奏更自然。
+   */
+  appendFarewellHook() {
+    if (this.farewellHooked) return;
+    this.farewellHooked = true;
+    const hook = '今天玩得好开心呀～明天我可能会长出小芽芽哦，记得来看我～晚安 🌙';
+    setTimeout(() => {
+      const messages = [...this.data.messages, { role: 'dodo' as const, text: hook }];
+      this.setData({ messages }, () => {
+        this.speakMessage(messages.length - 1, hook);
+        this.scrollToBottom();
+      });
+    }, 1200);
   },
 
   /** 朗读豆豆某条消息 */

@@ -13,22 +13,75 @@
   display: flex;
   flex-direction: row;
   align-items: center;
-  padding: 28rpx 32rpx;
+  padding: 32rpx;
   border: 1rpx solid var(--color-accent-glow);
 }
 
-.dodo-mood {
-  font-size: 64rpx;
-  margin-right: 24rpx;
+/* 豆豆头像容器：承载形象 + 右上角连胜火焰 */
+.dodo-avatar-wrap {
+  position: relative;
+  width: 96rpx;
+  height: 96rpx;
+  margin-right: 28rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dodo-mood-emoji {
+  font-size: 72rpx;
+  line-height: 1;
+}
+
+/* 连胜火焰：叠在豆豆右上角，只显形态；档位越高，微光越强、越大 */
+.dodo-flame {
+  position: absolute;
+  top: -8rpx;
+  right: -12rpx;
+  font-size: 32rpx;
+  line-height: 1;
+}
+
+.dodo-flame.flame-lv1 {
+  font-size: 28rpx;
+  opacity: 0.75;
+}
+.dodo-flame.flame-lv2 {
+  font-size: 32rpx;
+  opacity: 0.9;
+}
+.dodo-flame.flame-lv3 {
+  font-size: 36rpx;
+  opacity: 1;
+  filter: drop-shadow(0 0 6rpx rgba(251, 191, 36, 0.6));
+}
+.dodo-flame.flame-lv4 {
+  font-size: 40rpx;
+  opacity: 1;
+  filter: drop-shadow(0 0 10rpx rgba(251, 146, 36, 0.8));
+  animation: flame-flicker 1.5s ease-in-out infinite;
+}
+.dodo-flame.flame-lv5 {
+  font-size: 46rpx;
+  opacity: 1;
+  filter: drop-shadow(0 0 14rpx rgba(248, 113, 60, 0.95));
+  animation: flame-flicker 1.1s ease-in-out infinite;
+}
+
+@keyframes flame-flicker {
+  0%, 100% { transform: scale(1) rotate(-2deg); }
+  50% { transform: scale(1.12) rotate(2deg); }
 }
 
 .dodo-info {
   display: flex;
   flex-direction: column;
+  flex: 1;
 }
 
-.today-card {
-  padding: 32rpx;
+.dodo-mood-text {
+  margin-top: 8rpx;
+  line-height: 1.4;
 }
 
 .start-btn {
