@@ -102,6 +102,9 @@ Page({
     this.setData({ messages, inputValue: '', thinking: true });
     this.scrollToBottom();
 
+    // 检测用户是否主动告别（前端兜底，不依赖后端阶段）
+    const userWantsGoodbye = this.isGoodbye(value);
+
     // 没有会话则先补建
     if (!this.sessionId) {
       await this.startSession();
@@ -130,7 +133,8 @@ Page({
       this.speakMessage(this.data.messages.length - 1, res.message.text);
 
       // 进入告别阶段：补一句成长预告留存钩子（PRD 5.4.1/5.2，前端补，不改后端）
-      if (newStage === 'farewell') {
+      // 触发条件双保险：① 后端切到收尾阶段 wrapup；② 用户主动说了告别词
+      if (newStage === 'wrapup' || userWantsGoodbye) {
         this.appendFarewellHook();
       }
     } catch (err: any) {
@@ -159,7 +163,20 @@ Page({
   },
 
   /**
-   * 追加告别成长预告钩子（PRD 5.4.1 分镜7 / 5.2）
+   * 判断用户是否在表达"告别/想结束"的意图（中英文）
+   * 用于前端兜底触发成长预告钩子，不依赖后端阶段推进。
+   */
+  isGoodbye(text: string): boolean {
+    const t = text.toLowerCase();
+    const patterns = [
+      'bye', 'goodbye', 'good bye', 'see you', 'see ya', 'good night', 'goodnight',
+      'tomorrow', 'talk later', "i'm done", 'im done', 'gtg',
+      '拜拜', '再见', '再會', '明天见', '明天見', '晚安', '不聊了', '不学了', '走了', '结束', '下次见'
+    ];
+    return patterns.some((p) => t.includes(p));
+  },
+
+  /** 追加告别成长预告钩子（PRD 5.4.1 分镜7 / 5.2）
    * 让孩子带着"明天豆豆会长大"的期待离开，形成次日回访钩子。
    * 延迟 1.2s 追加，等豆豆的告别语先播完，节奏更自然。
    */

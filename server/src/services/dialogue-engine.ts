@@ -74,6 +74,7 @@ ${state.history.slice(-6).map((t) => `${t.speaker === 'dodo' ? 'Dodo' : 'Child'}
 4. NEVER correct harshly — use "Almost! Let me help you..." instead
 5. Use emojis sparingly (1-2 per response max)
 6. At wrapup stage, summarize what was learned and say a warm goodbye
+7. If the child says goodbye or wants to stop (bye, see you, tomorrow, 拜拜, 再见, 晚安, etc.), do NOT push a new topic. Warmly say goodbye and let them go happily.
 
 Respond in this JSON format only:
 {
@@ -165,6 +166,21 @@ export function createDialogueState(grade: number, interestTags?: string[]): Dia
   }
 }
 
+// ============================================================
+// 告别意图识别
+// 孩子主动说"再见/拜拜/see you/tomorrow"等，应立即进入收尾，
+// 而不是继续按轮数硬聊（否则会答非所问）。
+// ============================================================
+function detectGoodbyeIntent(message: string): boolean {
+  const t = message.toLowerCase()
+  const patterns = [
+    'bye', 'goodbye', 'good bye', 'see you', 'see ya', 'good night', 'goodnight',
+    'tomorrow', 'talk later', "i'm done", 'im done', 'gtg', 'good bye',
+    '拜拜', '再见', '再會', '明天见', '明天見', '晚安', '不聊了', '不学了', '走了', '结束', '下次见', '不想聊',
+  ]
+  return patterns.some((p) => t.includes(p))
+}
+
 export async function processChildMessage(
   state: DialogueState,
   message: string,
@@ -181,7 +197,11 @@ export async function processChildMessage(
   state.childEnglishRatio = state.childEnglishRatio * 0.7 + englishRatio * 0.3
 
   // 阶段切换
-  if (state.stage === 'warmup' && state.turn >= 2) {
+  // 优先级最高：孩子主动告别 → 立即进入收尾（不再按轮数硬聊，避免答非所问）
+  if (detectGoodbyeIntent(message)) {
+    state.stage = 'wrapup'
+    state.turn = 0
+  } else if (state.stage === 'warmup' && state.turn >= 2) {
     state.stage = 'topic'
     state.turn = 0
   } else if (state.stage === 'topic' && state.turn >= 3) {
@@ -237,7 +257,7 @@ async function generateLLMReply(state: DialogueState, grade: number): Promise<Do
       userInstruction = `Encourage the child to practice the sentence pattern "${state.targetSentence}" using today's words.`
       break
     case 'wrapup':
-      userInstruction = 'Give a positive summary of the conversation and say a warm goodbye.'
+      userInstruction = "The child seems ready to finish or said goodbye. Warmly acknowledge their goodbye, give a short positive summary of what they did well today, and say a heartfelt goodbye. Do NOT ask a new question or start a new topic."
       break
   }
 
