@@ -18,12 +18,11 @@ App<IAppOption>({
     const systemInfo = wx.getSystemInfoSync();
     this.globalData.systemInfo = systemInfo;
 
-    // 检查登录状态：无 token → 跳转登录页
+    // 检查登录状态：有 token → 直接进首页；无 token → 停留登录页
     const token = wx.getStorageSync('token');
     if (token) {
       this.globalData.token = token;
-    } else {
-      wx.reLaunch({ url: '/pages/login/login' });
+      wx.reLaunch({ url: '/pages/home/home' });
     }
   },
 

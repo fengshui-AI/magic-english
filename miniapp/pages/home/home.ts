@@ -20,7 +20,7 @@ Page({
     const app = getApp<IAppOption>();
     const user = app.globalData.userInfo;
     if (user) {
-      this.setData({ userName: user.nickname || '小朋友' });
+      this.setData({ userName: user.name || '小朋友' });
     }
   },
 
