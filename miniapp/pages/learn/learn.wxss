@@ -85,6 +85,29 @@
   opacity: 0.85;
 }
 
+/* 豆豆回复朗读喇叭 */
+.msg-speaker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 8rpx;
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 26rpx;
+}
+
+.msg-speaker.playing {
+  background: var(--color-accent);
+  animation: speaker-pulse 0.8s infinite;
+}
+
+@keyframes speaker-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
 /* 豆豆思考中 */
 .thinking-dots {
   color: var(--color-text-secondary);

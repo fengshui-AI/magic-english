@@ -20,6 +20,15 @@
       <view class="msg-bubble {{item.role}}">
         <text>{{item.text}}</text>
         <text wx:if="{{item.translation}}" class="msg-translation">{{item.translation}}</text>
+        <!-- 豆豆回复的朗读喇叭 -->
+        <view
+          wx:if="{{item.role === 'dodo'}}"
+          class="msg-speaker {{item.playing ? 'playing' : ''}}"
+          catchtap="handlePlayVoice"
+          data-index="{{index}}"
+        >
+          <text>{{item.playing ? '🔊' : '🔈'}}</text>
+        </view>
       </view>
     </view>
 

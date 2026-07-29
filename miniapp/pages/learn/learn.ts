@@ -4,6 +4,7 @@
  * Phase 2：接入后端 /api/v1/dialogue/* 真实 LLM 对话
  */
 import { post } from '../../utils/api';
+import { speak } from '../../utils/voice';
 
 /** 后端 dialogue 消息返回结构 */
 interface DodoReply {
@@ -31,7 +32,7 @@ Page({
     /** 当前阶段：greeting | teaching | practice | farewell */
     stage: 'greeting' as string,
     /** 对话历史 */
-    messages: [] as { role: 'dodo' | 'user'; text: string; translation?: string }[],
+    messages: [] as { role: 'dodo' | 'user'; text: string; translation?: string; playing?: boolean }[],
     /** 输入框内容 */
     inputValue: '',
     /** 是否录音中 */
@@ -68,6 +69,8 @@ Page({
         }],
         thinking: false
       });
+      // 开场白自动朗读
+      this.speakMessage(0, res.message.text);
     } catch (err: any) {
       // 后端异常时兜底，不让页面空白
       this.setData({
@@ -118,6 +121,8 @@ Page({
         }],
         thinking: false
       });
+      // 豆豆回复自动朗读（最新一条）
+      this.speakMessage(this.data.messages.length - 1, res.message.text);
     } catch (err: any) {
       this.setData({
         messages: [...this.data.messages, {
@@ -141,6 +146,24 @@ Page({
   handleRecord() {
     // TODO: Phase 2 后续 - 腾讯云 ASR 语音识别
     wx.showToast({ title: '语音功能开发中', icon: 'none' });
+  },
+
+  /** 朗读豆豆某条消息 */
+  speakMessage(index: number, text: string) {
+    const key = `messages[${index}].playing` as const;
+    this.setData({ [key]: true });
+    speak(text, 'dodo', (playing) => {
+      this.setData({ [key]: playing });
+    });
+  },
+
+  /** 点击豆豆气泡的喇叭图标重读 */
+  handlePlayVoice(e: WechatMiniprogram.TouchEvent) {
+    const index = e.currentTarget.dataset.index;
+    const msg = this.data.messages[index];
+    if (msg && msg.role === 'dodo') {
+      this.speakMessage(index, msg.text);
+    }
   },
 
   /** 滚动到对话底部（wxml 的 scroll-into-view 已按 messages.length 自动跟随，无需额外处理） */
