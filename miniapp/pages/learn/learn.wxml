@@ -19,6 +19,15 @@
       <text class="msg-avatar">{{item.role === 'dodo' ? '🐣' : '👦'}}</text>
       <view class="msg-bubble {{item.role}}">
         <text>{{item.text}}</text>
+        <text wx:if="{{item.translation}}" class="msg-translation">{{item.translation}}</text>
+      </view>
+    </view>
+
+    <!-- 豆豆思考中 -->
+    <view wx:if="{{thinking}}" class="msg dodo" id="msg-thinking">
+      <text class="msg-avatar">🐣</text>
+      <view class="msg-bubble dodo">
+        <text class="thinking-dots">豆豆在想…</text>
       </view>
     </view>
   </scroll-view>

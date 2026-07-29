@@ -1,20 +1,43 @@
 /**
  * 学习页（核心）- 底部 TabBar 第2项
  * 对话式英语学习，豆豆角色引导
+ * Phase 2：接入后端 /api/v1/dialogue/* 真实 LLM 对话
  */
+import { post } from '../../utils/api';
+
+/** 后端 dialogue 消息返回结构 */
+interface DodoReply {
+  text: string;
+  translation?: string;
+  stage?: string;
+}
+interface StartResp {
+  sessionId: string;
+  message: DodoReply;
+  audioUrl?: string;
+  stage?: string;
+}
+interface MessageResp {
+  message: DodoReply;
+  audioUrl?: string;
+  stage?: string;
+  childEnglishRatio?: number;
+  turn?: number;
+  totalTurns?: number;
+}
 
 Page({
   data: {
     /** 当前阶段：greeting | teaching | practice | farewell */
     stage: 'greeting' as string,
-    /** 当前单词 */
-    currentWord: null as WordItem | null,
     /** 对话历史 */
-    messages: [] as { role: 'dodo' | 'user'; text: string }[],
+    messages: [] as { role: 'dodo' | 'user'; text: string; translation?: string }[],
     /** 输入框内容 */
     inputValue: '',
     /** 是否录音中 */
     recording: false,
+    /** 豆豆是否正在思考（等后端回复） */
+    thinking: false,
     /** 学习进度 */
     progress: {
       learned: 0,
@@ -22,31 +45,91 @@ Page({
     }
   },
 
+  /** 当前对话会话 ID */
+  sessionId: '' as string,
+
   onLoad() {
     this.startSession();
   },
 
-  /** 开始学习会话 */
-  startSession() {
-    this.setData({
-      messages: [{
-        role: 'dodo',
-        text: 'Hello! 欢迎来到豆语星球！今天我们来学一些有趣的英语单词吧！✨'
-      }]
-    });
+  /** 开始学习会话——调后端 dialogue/start 拿开场白 */
+  async startSession() {
+    this.setData({ thinking: true });
+    wx.showLoading({ title: '豆豆来啦…', mask: true });
+    try {
+      const res = await post<StartResp>('/api/v1/dialogue/start', { grade: 3 });
+      this.sessionId = res.sessionId;
+      this.setData({
+        stage: res.stage || 'greeting',
+        messages: [{
+          role: 'dodo',
+          text: res.message.text,
+          translation: res.message.translation
+        }],
+        thinking: false
+      });
+    } catch (err: any) {
+      // 后端异常时兜底，不让页面空白
+      this.setData({
+        messages: [{
+          role: 'dodo',
+          text: 'Hello! 欢迎来到豆语星球！豆豆现在有点累，稍后再陪你聊哦～'
+        }],
+        thinking: false
+      });
+      console.error('[dialogue/start] failed:', err);
+    } finally {
+      wx.hideLoading();
+      this.scrollToBottom();
+    }
   },
 
-  /** 发送文字消息 */
-  handleSend() {
+  /** 发送文字消息——调后端 dialogue/message 拿真实回复 */
+  async handleSend() {
     const value = this.data.inputValue.trim();
     if (!value) return;
+    if (this.data.thinking) return; // 豆豆思考中，防连点
 
-    // 添加用户消息
+    // 先上屏用户消息
     const messages = [...this.data.messages, { role: 'user' as const, text: value }];
-    this.setData({ messages, inputValue: '' });
+    this.setData({ messages, inputValue: '', thinking: true });
+    this.scrollToBottom();
 
-    // TODO: Phase 2 - 调用 LLM 对话 API
-    this.mockDodoReply(messages);
+    // 没有会话则先补建
+    if (!this.sessionId) {
+      await this.startSession();
+      if (!this.sessionId) {
+        this.setData({ thinking: false });
+        return;
+      }
+    }
+
+    try {
+      const res = await post<MessageResp>('/api/v1/dialogue/message', {
+        sessionId: this.sessionId,
+        message: value
+      });
+      this.setData({
+        stage: res.stage || this.data.stage,
+        messages: [...this.data.messages, {
+          role: 'dodo' as const,
+          text: res.message.text,
+          translation: res.message.translation
+        }],
+        thinking: false
+      });
+    } catch (err: any) {
+      this.setData({
+        messages: [...this.data.messages, {
+          role: 'dodo' as const,
+          text: '豆豆没听清，再说一次好吗？😊'
+        }],
+        thinking: false
+      });
+      console.error('[dialogue/message] failed:', err);
+    } finally {
+      this.scrollToBottom();
+    }
   },
 
   /** 输入框内容变化 */
@@ -56,27 +139,12 @@ Page({
 
   /** 开始/停止录音 */
   handleRecord() {
-    // TODO: Phase 2 - 腾讯云 ASR 语音识别
+    // TODO: Phase 2 后续 - 腾讯云 ASR 语音识别
     wx.showToast({ title: '语音功能开发中', icon: 'none' });
   },
 
-  /** 模拟豆豆回复（Phase 1 移除，Phase 2 接入 LLM） */
-  mockDodoReply(messages: { role: string; text: string }[]) {
-    setTimeout(() => {
-      const replies = [
-        'Great! 你学得很棒！👍',
-        'Wonderful! 我们继续加油！⭐',
-        'Amazing! 你的发音真好听！🎵'
-      ];
-      const reply = replies[Math.floor(Math.random() * replies.length)];
-      this.setData({
-        messages: [...messages, { role: 'dodo', text: reply }]
-      });
-    }, 800);
-  },
-
-  /** 滚动到对话底部 */
+  /** 滚动到对话底部（wxml 的 scroll-into-view 已按 messages.length 自动跟随，无需额外处理） */
   scrollToBottom() {
-    // 小程序中通过 scroll-view 的 scroll-into-view 实现
+    // no-op：滚动由 wxml scroll-into-view 自动完成
   }
 });

@@ -76,6 +76,21 @@
   color: #fff;
 }
 
+/* 豆豆回复的中文翻译（次要文字，换行显示） */
+.msg-translation {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: var(--color-text-secondary);
+  opacity: 0.85;
+}
+
+/* 豆豆思考中 */
+.thinking-dots {
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
 /* 输入栏 */
 .input-bar {
   display: flex;
