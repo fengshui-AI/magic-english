@@ -389,6 +389,60 @@ learningRoutes.get('/review-queue', async (req: Request, res: Response) => {
 })
 
 // ============================================================
+// GET /journal — 手账本：用户学过的所有单词卡牌（含稀有度）
+// 稀有度规则：new/learning=common、review=rare、mastered=epic
+// ============================================================
+learningRoutes.get('/journal', async (req: Request, res: Response) => {
+  try {
+    const { userId } = getJwtPayload(req)
+
+    const rows = await db
+      .select({
+        id: words.id,
+        word: words.word,
+        meaning: words.translation,
+        theme: words.theme,
+        status: wordProgress.status,
+        reviewCount: wordProgress.reviewCount,
+        updatedAt: wordProgress.updatedAt,
+      })
+      .from(wordProgress)
+      .innerJoin(words, eq(wordProgress.wordId, words.id))
+      .where(eq(wordProgress.userId, userId))
+      .orderBy(desc(wordProgress.updatedAt))
+
+    const statusToRarity = (status: string): { rarity: string; rarityLabel: string } => {
+      if (status === 'mastered') return { rarity: 'epic', rarityLabel: '史诗' }
+      if (status === 'review') return { rarity: 'rare', rarityLabel: '稀有' }
+      return { rarity: 'common', rarityLabel: '普通' }
+    }
+
+    const items = rows.map((r) => {
+      const { rarity, rarityLabel } = statusToRarity(r.status)
+      return {
+        id: r.id,
+        word: r.word,
+        meaning: r.meaning,
+        theme: r.theme,
+        status: r.status,
+        rarity,
+        rarityLabel,
+      }
+    })
+
+    const stats = {
+      total: items.length,
+      rare: items.filter((i) => i.rarity === 'rare').length,
+      epic: items.filter((i) => i.rarity === 'epic').length,
+    }
+
+    res.json({ items, stats })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to get journal' })
+  }
+})
+
+// ============================================================
 // POST /review/:wordId — 提交复习结果
 // ============================================================
 learningRoutes.post('/review/:wordId', async (req: Request, res: Response) => {

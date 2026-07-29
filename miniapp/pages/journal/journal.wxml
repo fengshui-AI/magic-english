@@ -3,7 +3,7 @@
   <!-- 顶部统计 -->
   <view class="stats-bar">
     <text class="text-xs text-secondary">共 {{stats.total}} 张卡牌</text>
-    <text class="text-xs text-accent">稀有 {{stats.rare}}</text>
+    <text class="text-xs text-accent">稀有 {{stats.rare}} · 史诗 {{stats.epic}}</text>
   </view>
 
   <!-- 筛选栏 -->
@@ -35,10 +35,11 @@
     <view
       wx:for="{{cards}}"
       wx:key="id"
-      class="word-card"
+      class="word-card rarity-{{item.rarity}}"
       data-index="{{index}}"
       bindtap="handleCardTap"
     >
+      <text class="card-badge rarity-{{item.rarity}}">{{item.rarityLabel}}</text>
       <text class="card-word">{{item.word}}</text>
       <text class="card-meaning">{{item.meaning}}</text>
     </view>
