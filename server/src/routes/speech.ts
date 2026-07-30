@@ -20,13 +20,25 @@ const ttsSchema = z.object({
 })
 
 speechRoutes.post('/tts', validateBody(ttsSchema), async (req: Request, res: Response) => {
-  const body = getValidatedBody<typeof ttsSchema>(req)
-  const result = await synthesizeSpeech({
-    text: body.text,
-    voice: body.voice,
-    speed: body.speed,
-  })
-  res.json(result)
+  try {
+    const body = getValidatedBody<typeof ttsSchema>(req)
+    const result = await synthesizeSpeech({
+      text: body.text,
+      voice: body.voice,
+      speed: body.speed,
+    })
+    res.json(result)
+  } catch (err: any) {
+    // 兜底：TTS 失败时返回空音频（前端走"语音暂不可用"toast），不影响对话流程
+    console.error('[TTS route] failed:', err?.message?.substring(0, 200))
+    res.json({
+      audioUrl: '',
+      audioBase64: '',
+      duration: 0,
+      text: (req as any).body?.text || '',
+      error: 'TTS 暂时不可用',
+    })
+  }
 })
 
 // ============================================================
