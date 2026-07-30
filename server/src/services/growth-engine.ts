@@ -40,13 +40,28 @@ export const STAGE_LABEL: Record<PetStage, string> = {
  *
  * 注：数值是起始配置，上线后按真实流失数据调曲线，改这里即可。
  * PRD 4.6.2 列的 5/30/90/240/500 是六阶段版本，A 阶段先用四阶段等比映射。
+ *
+ * ⭐ DEV 测试开关：部署环境设环境变量 GROWTH_TEST_MODE=1 时，门槛压到 1/2/3 分钟，
+ *    学一次即可看到跨阶段推进，用于真机快速验证。测完在 CloudBase 环境变量里删掉该变量
+ *    即恢复正式门槛，无需改代码 / 重新 push。默认（不设该变量）= 正式门槛 30/120/300。
  */
-export const GROWTH_CONFIG: { stage: PetStage; threshold: number }[] = [
+const GROWTH_TEST_MODE = process.env.GROWTH_TEST_MODE === '1'
+
+const GROWTH_CONFIG_PROD: { stage: PetStage; threshold: number }[] = [
   { stage: 'seed', threshold: 0 },
-  { stage: 'sprout', threshold: 1 }, // ⚠️临时验证值(原30)：学1分钟即发芽，验证完改回30
+  { stage: 'sprout', threshold: 30 },
   { stage: 'bloom', threshold: 120 },
   { stage: 'fruit', threshold: 300 },
 ]
+
+const GROWTH_CONFIG_TEST: { stage: PetStage; threshold: number }[] = [
+  { stage: 'seed', threshold: 0 },
+  { stage: 'sprout', threshold: 1 },
+  { stage: 'bloom', threshold: 2 },
+  { stage: 'fruit', threshold: 3 },
+]
+
+export const GROWTH_CONFIG = GROWTH_TEST_MODE ? GROWTH_CONFIG_TEST : GROWTH_CONFIG_PROD
 
 /** 根据累计分钟计算「应该处于」的阶段 */
 export function stageForMinutes(totalMinutes: number): PetStage {

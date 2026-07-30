@@ -3,7 +3,7 @@
  * 对话式英语学习，豆豆角色引导
  * Phase 2：接入后端 /api/v1/dialogue/* 真实 LLM 对话
  */
-import { post } from '../../utils/api';
+import { post, request } from '../../utils/api';
 import { speak } from '../../utils/voice';
 
 /** 后端 dialogue 消息返回结构 */
@@ -25,6 +25,11 @@ interface MessageResp {
   childEnglishRatio?: number;
   turn?: number;
   totalTurns?: number;
+}
+
+/** session/start 返回结构 */
+interface SessionStartResp {
+  session: { id: string };
 }
 
 Page({
@@ -49,11 +54,84 @@ Page({
   /** 当前对话会话 ID */
   sessionId: '' as string,
 
+  /** 学习时长记录：后端 learningRecords 的 id（session/start 返回） */
+  learningRecordId: '' as string,
+  /** 本次进入学习页的开始时间戳（ms） */
+  learnStartAt: 0 as number,
+  /** 是否正在开学习记录，防止 onShow 重复触发 */
+  startingRecord: false as boolean,
+
   /** 是否已追加过告别钩子（防止 farewell 多轮重复追加） */
   farewellHooked: false,
 
   onLoad() {
     this.startSession();
+  },
+
+  /** 每次页面显示：开一条学习时长记录，开始计时 */
+  onShow() {
+    this.beginLearningRecord();
+  },
+
+  /** 页面隐藏（切后台/跳其他 Tab）：结算并上报学习时长 */
+  onHide() {
+    this.endLearningRecord();
+  },
+
+  /** 页面卸载：结算并上报学习时长 */
+  onUnload() {
+    this.endLearningRecord();
+  },
+
+  /**
+   * 开一条学习时长记录（session/start），记录开始时间。
+   * 静默调用，不弹 loading、失败不打扰学习。
+   * 成长引擎的数据源头——没有它豆豆永远不长大。
+   */
+  async beginLearningRecord() {
+    if (this.learningRecordId || this.startingRecord) return;
+    this.startingRecord = true;
+    try {
+      const res = await request<SessionStartResp>({
+        url: '/api/v1/learning/session/start',
+        method: 'POST',
+        showLoading: false,
+      });
+      this.learningRecordId = res?.session?.id || '';
+      this.learnStartAt = Date.now();
+    } catch (err) {
+      console.error('[session/start] failed:', err);
+    } finally {
+      this.startingRecord = false;
+    }
+  },
+
+  /**
+   * 结算本次学习时长并上报（session/end），触发后端成长引擎推进豆豆 stage。
+   * effectiveMinutes 至少记 1 分钟（哪怕停留不足 1 分钟，也算陪伴了一次）。
+   * 上报后清空记录 id，避免重复上报。
+   */
+  endLearningRecord() {
+    const recordId = this.learningRecordId;
+    if (!recordId || !this.learnStartAt) return;
+    // 先清空，避免 onHide+onUnload 连续触发重复上报
+    this.learningRecordId = '';
+    const elapsedMs = Date.now() - this.learnStartAt;
+    this.learnStartAt = 0;
+    const effectiveMinutes = Math.max(1, Math.round(elapsedMs / 60000));
+    // 静默上报，不阻塞页面离开
+    request({
+      url: '/api/v1/learning/session/end',
+      method: 'POST',
+      data: {
+        sessionId: recordId,
+        effectiveMinutes,
+        sentencesSpoken: this.data.messages.filter((m) => m.role === 'user').length,
+      },
+      showLoading: false,
+    }).catch((err) => {
+      console.error('[session/end] failed:', err);
+    });
   },
 
   /** 开始学习会话——调后端 dialogue/start 拿开场白 */
