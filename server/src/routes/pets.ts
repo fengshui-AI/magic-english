@@ -72,26 +72,17 @@ petRoutes.post('/', validateBody(createPetSchema), async (req: Request, res: Res
   }
 })
 
-// GET /api/v1/pets/mine — 获取当前用户的豆豆（首次自动创建）
+// GET /api/v1/pets/mine — 获取当前用户的豆豆
+// Phase B 起：豆豆必须经"砸金蛋诞生仪式"才产生，此处不再自动创建。
+// 没豆豆时返回 { pet: null }，前端据此显示"召唤金蛋"引导态。
 petRoutes.get('/mine', async (req: Request, res: Response) => {
   try {
     const { userId } = getJwtPayload(req)
-    let [pet] = await db.select().from(pets).where(eq(pets.userId, userId)).limit(1)
+    const [pet] = await db.select().from(pets).where(eq(pets.userId, userId)).limit(1)
 
-    // 首次访问自动创建豆豆（默认 seed 阶段）
+    // 还没砸蛋诞生豆豆 → 返回空，前端引导去砸蛋（不再自动建豆豆）
     if (!pet) {
-      const [created] = await db
-        .insert(pets)
-        .values({
-          userId,
-          name: '豆豆',
-          birthPlace: 'forest',
-          personality: 'curious',
-          specialty: 'balanced',
-        })
-        .returning()
-      const growth = buildGrowthInfo(created.totalLearningMinutes, migrateLegacyStage(created.stage))
-      res.status(201).json({ pet: created, growth })
+      res.json({ pet: null, growth: null })
       return
     }
 
