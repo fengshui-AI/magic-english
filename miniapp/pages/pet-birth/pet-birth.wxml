@@ -1,0 +1,81 @@
+<!-- 砸金蛋诞生仪式 PRD 4.3.6 -->
+<view class="birth-page">
+
+  <!-- 顶部标题 -->
+  <view class="header">
+    <view class="title">给豆豆挑一个家</view>
+    <view wx:if="{{phase === 'crack'}}" class="subtitle">还有 {{remainingChances}} 次机会</view>
+    <view wx:else class="subtitle">挑一个你最喜欢的留下</view>
+  </view>
+
+  <!-- 阶段一：砸蛋 -->
+  <view wx:if="{{phase === 'crack'}}" class="egg-stage">
+    <view class="egg-grid">
+      <view
+        wx:for="{{eggs}}"
+        wx:key="*this"
+        class="egg {{crackingIndex === index ? 'cracking' : 'idle'}}"
+        style="animation-delay: {{index * 0.15}}s"
+        data-idx="{{index}}"
+        bindtap="handleCrack"
+      >
+        <view class="egg-body">
+          <view class="egg-shine"></view>
+        </view>
+        <view class="egg-shadow"></view>
+      </view>
+    </view>
+    <view class="hint">点一颗金蛋，敲敲看里面是什么～</view>
+
+    <!-- 已砸出的小结果条 -->
+    <view wx:if="{{rolls.length > 0}}" class="mini-rolls">
+      <view wx:for="{{rolls}}" wx:key="id" class="mini-roll" style="background: {{item.color}}">
+        <text class="mini-label">{{item.containerLabel}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 阶段二：3选1 -->
+  <view wx:else class="choose-stage">
+    <view
+      wx:for="{{rolls}}"
+      wx:key="id"
+      class="choice {{chosenId === item.id ? 'selected' : ''}}"
+      style="border-color: {{chosenId === item.id ? item.glow : 'rgba(83,74,183,0.4)'}}"
+      data-id="{{item.id}}"
+      bindtap="handleSelect"
+    >
+      <view class="choice-icon" style="background: {{item.color}}; box-shadow: 0 0 20rpx {{item.glow}}">
+        <text class="choice-emoji">{{item.containerLabel}}</text>
+      </view>
+      <view class="choice-info">
+        <view class="choice-name">{{item.desc}}</view>
+        <view class="choice-tag" style="color: {{item.glow}}">{{item.rarityLabel}}</view>
+      </view>
+      <view wx:if="{{chosenId === item.id}}" class="choice-check">✓</view>
+    </view>
+
+    <button
+      class="confirm-btn {{chosenId ? '' : 'disabled'}}"
+      disabled="{{!chosenId || submitting}}"
+      bindtap="handleConfirm"
+    >就选它！</button>
+  </view>
+
+  <!-- 砸蛋结果弹层 -->
+  <view wx:if="{{showResult}}" class="result-mask" bindtap="handleCloseResult">
+    <view class="result-card" catchtap="">
+      <view class="result-title">砸开啦！</view>
+      <view class="result-icon" style="background: {{lastRoll.color}}; box-shadow: 0 0 40rpx {{lastRoll.glow}}">
+        <text class="result-emoji">{{lastRoll.containerLabel}}</text>
+      </view>
+      <view class="result-desc">{{lastRoll.desc}}</view>
+      <view class="result-rarity" style="color: {{lastRoll.glow}}">{{lastRoll.rarityLabel}}</view>
+      <button class="result-btn" bindtap="handleCloseResult">
+        {{remainingChances > 0 ? '再砸一颗' : '去挑一个'}}
+      </button>
+      <view wx:if="{{remainingChances > 0}}" class="result-remain">还有 {{remainingChances}} 次机会</view>
+    </view>
+  </view>
+
+</view>

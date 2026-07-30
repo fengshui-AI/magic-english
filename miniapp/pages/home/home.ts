@@ -75,6 +75,8 @@ Page({
     flameClass: '',
     userName: '小朋友',
     loading: true,
+    /** 是否已拥有豆豆：false=引导去砸蛋诞生，true=正常展示成长时光 */
+    hasPet: false,
   },
 
   onShow() {
@@ -97,6 +99,7 @@ Page({
       const patch: Record<string, unknown> = { loading: false };
 
       if (petRes?.pet) {
+        patch.hasPet = true;
         const stage = STAGE_MAP[petRes.pet.stage] || STAGE_MAP.seed;
         patch.dodoName = petRes.pet.name || '豆豆';
         patch.dodoStage = stage.label;
@@ -106,6 +109,9 @@ Page({
         if (petRes.growth?.hint) {
           patch.growthHint = petRes.growth.hint;
         }
+      } else {
+        // 还没砸蛋诞生豆豆：首页显示召唤引导态
+        patch.hasPet = false;
       }
 
       if (progressRes?.summary) {
@@ -124,11 +130,25 @@ Page({
 
   /** 点击开始学习（learn 是 tab 页，必须用 switchTab） */
   handleStartLearn() {
+    // 还没豆豆 → 先去砸蛋把豆豆召唤出来，再开始学习
+    if (!this.data.hasPet) {
+      wx.navigateTo({ url: '/pages/pet-birth/pet-birth' });
+      return;
+    }
     wx.switchTab({ url: '/pages/learn/learn' });
   },
 
-  /** 进入宠物家园 */
+  /** 去砸蛋诞生豆豆（首页引导态点击） */
+  handleGoBirth() {
+    wx.navigateTo({ url: '/pages/pet-birth/pet-birth' });
+  },
+
+  /** 进入宠物家园（无豆豆时先引导去砸蛋） */
   handleEnterPet() {
+    if (!this.data.hasPet) {
+      wx.navigateTo({ url: '/pages/pet-birth/pet-birth' });
+      return;
+    }
     wx.navigateTo({ url: '/pages/pet/pet' });
   },
 

@@ -17,6 +17,20 @@
   border: 1rpx solid var(--color-accent-glow);
 }
 
+/* 召唤引导态：金蛋轻晃招手，卡片描边更亮，暗示"点我" */
+.dodo-card.birth-guide {
+  border-color: rgba(245, 215, 138, 0.6);
+}
+.birth-egg {
+  animation: egg-beckon 1.6s ease-in-out infinite;
+  transform-origin: bottom center;
+  display: inline-block;
+}
+@keyframes egg-beckon {
+  0%, 100% { transform: rotate(-6deg) translateY(0); }
+  50%      { transform: rotate(6deg) translateY(-6rpx); }
+}
+
 /* 豆豆头像容器：承载形象 + 右上角连胜火焰 */
 .dodo-avatar-wrap {
   position: relative;

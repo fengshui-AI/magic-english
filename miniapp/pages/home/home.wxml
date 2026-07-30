@@ -3,11 +3,11 @@
   <!-- 顶部问候 -->
   <view class="header">
     <text class="greeting text-lg">你好，{{userName}}！</text>
-    <text class="subtitle text-sm text-secondary">豆豆在等你哦 ⚡</text>
+    <text class="subtitle text-sm text-secondary">{{hasPet ? '豆豆在等你哦 ⚡' : '你的豆豆还没出生哦 ⚡'}}</text>
   </view>
 
-  <!-- 豆豆状态卡片：形象 + 成长时光 + 连胜火焰（无任何数字，遵守 PRD 4.7） -->
-  <view class="dodo-card card card-glow" bindtap="handleEnterPet">
+  <!-- 豆豆状态卡片：已有豆豆展示成长时光；未诞生则显示召唤引导态 -->
+  <view wx:if="{{hasPet}}" class="dodo-card card card-glow" bindtap="handleEnterPet">
     <view class="dodo-avatar-wrap">
       <text class="dodo-mood-emoji">{{dodoEmoji}}</text>
       <!-- 连胜火焰：只显形态不显天数，档位越高微光越强 -->
@@ -21,9 +21,21 @@
     </view>
   </view>
 
-  <!-- 开始学习按钮 -->
+  <!-- 未诞生：召唤豆豆引导卡（点击去砸金蛋） -->
+  <view wx:else class="dodo-card card card-glow birth-guide" bindtap="handleGoBirth">
+    <view class="dodo-avatar-wrap">
+      <text class="dodo-mood-emoji birth-egg">🥚</text>
+    </view>
+    <view class="dodo-info">
+      <text class="text-md text-bold">召唤你的豆豆</text>
+      <text class="dodo-mood-text text-sm text-secondary">神秘的金蛋在等你敲开，快来把豆豆召唤出来吧</text>
+      <text class="dodo-growth-hint text-sm">👉 点这里，砸开金蛋</text>
+    </view>
+  </view>
+
+  <!-- 开始按钮：有豆豆去学习，没豆豆先砸蛋 -->
   <button class="btn btn-primary start-btn mt-lg" bindtap="handleStartLearn">
-    去找豆豆玩
+    {{hasPet ? '去找豆豆玩' : '去砸金蛋'}}
   </button>
 
   <!-- 入口区 -->

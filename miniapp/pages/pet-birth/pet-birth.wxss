@@ -1,0 +1,251 @@
+/* 砸金蛋诞生仪式 */
+.birth-page {
+  min-height: 100vh;
+  background: #0f0f23;
+  padding: 60rpx 40rpx 80rpx;
+  box-sizing: border-box;
+}
+
+.header { text-align: center; margin-bottom: 60rpx; }
+.title { font-size: 44rpx; font-weight: 600; color: #ffffff; margin-bottom: 16rpx; }
+.subtitle { font-size: 26rpx; color: #8b8ba7; }
+
+/* ===== 阶段一：砸蛋 ===== */
+.egg-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 40rpx 50rpx;
+  margin-bottom: 50rpx;
+}
+
+.egg {
+  width: 150rpx;
+  height: 190rpx;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* 蛋身：径向渐变模拟球体立体感（光源左上→底部收暗）+ 内阴影暗边 + 外投影 */
+.egg-body {
+  width: 120rpx;
+  height: 150rpx;
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  background: radial-gradient(
+    ellipse 70% 75% at 36% 30%,
+    #FBE3A6 0%,
+    #F0B84E 26%,
+    #D9932E 55%,
+    #A9660F 82%,
+    #7E4708 100%
+  );
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    inset -8rpx -12rpx 20rpx rgba(90, 45, 5, 0.55),
+    inset 6rpx 8rpx 14rpx rgba(255, 240, 200, 0.35),
+    0 10rpx 18rpx rgba(0, 0, 0, 0.3);
+}
+.egg-shine {
+  position: absolute;
+  top: 20rpx;
+  left: 24rpx;
+  width: 34rpx;
+  height: 50rpx;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(255, 252, 240, 0.95) 0%,
+    rgba(255, 245, 210, 0.5) 45%,
+    rgba(255, 245, 210, 0) 100%
+  );
+  transform: rotate(-18deg);
+}
+.egg-shadow {
+  width: 90rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.35);
+  margin-top: 12rpx;
+}
+
+/* 待机动画：轻微摇晃 + 呼吸，像在招手说"敲我" */
+.egg.idle .egg-body {
+  animation: egg-wobble 1.8s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+@keyframes egg-wobble {
+  0%, 100% { transform: rotate(-5deg) translateY(0); }
+  25%      { transform: rotate(0deg)  translateY(-8rpx); }
+  50%      { transform: rotate(5deg)  translateY(0); }
+  75%      { transform: rotate(0deg)  translateY(-8rpx); }
+}
+
+/* 砸中动画：剧烈抖动 */
+.egg.cracking .egg-body {
+  animation: egg-crack 0.6s ease-in-out;
+}
+@keyframes egg-crack {
+  0%, 100% { transform: translateX(0) scale(1); }
+  15% { transform: translateX(-10rpx) rotate(-8deg); }
+  30% { transform: translateX(10rpx) rotate(8deg); }
+  45% { transform: translateX(-12rpx) rotate(-10deg) scale(1.05); }
+  60% { transform: translateX(12rpx) rotate(10deg) scale(1.08); }
+  80% { transform: translateX(-6rpx) scale(1.1); }
+}
+
+.hint {
+  text-align: center;
+  font-size: 26rpx;
+  color: #EF9F27;
+  margin-bottom: 40rpx;
+}
+
+.mini-rolls {
+  display: flex;
+  justify-content: center;
+  gap: 20rpx;
+  flex-wrap: wrap;
+}
+.mini-roll {
+  min-width: 90rpx;
+  height: 60rpx;
+  border-radius: 30rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 20rpx;
+}
+.mini-label { font-size: 24rpx; color: #ffffff; font-weight: 500; }
+
+/* ===== 阶段二：3选1 ===== */
+.choose-stage { display: flex; flex-direction: column; gap: 28rpx; margin-top: 20rpx; }
+.choice {
+  display: flex;
+  align-items: center;
+  background: #1a1a2e;
+  border: 3rpx solid rgba(83,74,183,0.4);
+  border-radius: 24rpx;
+  padding: 28rpx 32rpx;
+  position: relative;
+  transition: transform 0.15s;
+}
+.choice.selected { transform: scale(1.02); }
+.choice-icon {
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 28rpx;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+}
+/* 球体明暗层：左上提亮、右下压暗，叠在动态纯色上做出立体感 */
+.choice-icon::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse 65% 65% at 32% 28%,
+    rgba(255, 255, 255, 0.55) 0%,
+    rgba(255, 255, 255, 0.12) 38%,
+    rgba(0, 0, 0, 0) 60%,
+    rgba(0, 0, 0, 0.35) 100%
+  );
+  pointer-events: none;
+}
+.choice-emoji, .choice-icon .choice-check { position: relative; z-index: 1; }
+.choice-emoji { font-size: 30rpx; color: #ffffff; font-weight: 600; }
+.choice-info { flex: 1; }
+.choice-name { font-size: 32rpx; color: #ffffff; font-weight: 500; margin-bottom: 8rpx; }
+.choice-tag { font-size: 24rpx; }
+.choice-check {
+  font-size: 40rpx;
+  color: #5DCAA5;
+  font-weight: 600;
+}
+
+.confirm-btn {
+  margin-top: 40rpx;
+  background: #7c5ce7;
+  color: #ffffff;
+  font-size: 32rpx;
+  font-weight: 500;
+  border-radius: 40rpx;
+  padding: 20rpx 0;
+  border: none;
+}
+.confirm-btn.disabled { background: #3a3a52; color: #6a6a8a; }
+
+/* ===== 结果弹层 ===== */
+.result-mask {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.result-card {
+  width: 560rpx;
+  background: #1a1a2e;
+  border-radius: 32rpx;
+  padding: 60rpx 40rpx;
+  text-align: center;
+  animation: pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes pop-in {
+  0% { transform: scale(0.5); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.result-title { font-size: 36rpx; color: #ffffff; font-weight: 600; margin-bottom: 40rpx; }
+.result-icon {
+  width: 180rpx;
+  height: 180rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 32rpx;
+  animation: float 2s ease-in-out infinite;
+  position: relative;
+  overflow: hidden;
+}
+/* 球体明暗层：与 choice-icon 同款，做出立体的圆球质感 */
+.result-icon::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse 65% 65% at 32% 28%,
+    rgba(255, 255, 255, 0.6) 0%,
+    rgba(255, 255, 255, 0.15) 38%,
+    rgba(0, 0, 0, 0) 60%,
+    rgba(0, 0, 0, 0.38) 100%
+  );
+  pointer-events: none;
+}
+.result-emoji { font-size: 56rpx; color: #ffffff; font-weight: 600; position: relative; z-index: 1; }
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-16rpx); }
+}
+.result-desc { font-size: 32rpx; color: #ffffff; margin-bottom: 12rpx; }
+.result-rarity { font-size: 28rpx; font-weight: 500; margin-bottom: 40rpx; }
+.result-btn {
+  background: #7c5ce7;
+  color: #ffffff;
+  font-size: 30rpx;
+  border-radius: 40rpx;
+  padding: 18rpx 0;
+  border: none;
+}
+.result-remain { font-size: 24rpx; color: #8b8ba7; margin-top: 20rpx; }

@@ -49,10 +49,10 @@ function request<T = unknown>(options: RequestOptions): Promise<T> {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           resolve(res.data as T);
         } else {
-          const errData = res.data as { message?: string };
+          const errData = res.data as { message?: string; error?: string };
           reject({
             code: res.statusCode,
-            message: errData?.message || '请求失败'
+            message: errData?.error || errData?.message || '请求失败'
           });
         }
       },
