@@ -129,7 +129,8 @@ export async function synthesizeSpeech(req: TTSRequest): Promise<TTSResponse> {
       Codec: 'mp3',
       Speed: req.speed ?? 0,   // -2~2，0 为正常
       Volume: 5,                // 0~10
-      PrimaryLanguage: 2,       // 2=英文
+      // PrimaryLanguage: 1=中文 2=英文 4=中英混排。按文本主语言自适应，避免 SDK 报"something wrong with request handler"
+      PrimaryLanguage: detectPrimaryLanguage(req.text),
     }
 
     const response = await client.TextToVoice(params)
@@ -326,4 +327,21 @@ export const DOODO_PHRASES: Record<string, string[]> = {
 export function getDodoPhrase(category: keyof typeof DOODO_PHRASES): string {
   const phrases = DOODO_PHRASES[category]
   return phrases[Math.floor(Math.random() * phrases.length)]
+}
+
+/**
+ * 检测文本主语言，用于腾讯云 TTS PrimaryLanguage 参数
+ * 1=中文 2=英文 4=中英混排
+ * 判定逻辑：英文字母占比 >50% → 2；中文字符占比 >50% → 1；其他/混排 → 4
+ */
+function detectPrimaryLanguage(text: string): 1 | 2 | 4 {
+  if (!text) return 2
+  const englishChars = (text.match(/[a-zA-Z]/g) || []).length
+  const chineseChars = (text.match(/[\u4e00-\u9fa5]/g) || []).length
+  const total = englishChars + chineseChars
+  if (total === 0) return 2 // 纯符号/数字，按英文处理
+  const englishRatio = englishChars / total
+  if (englishRatio > 0.5) return 2
+  if (englishRatio < 0.2) return 1
+  return 4 // 混排
 }
