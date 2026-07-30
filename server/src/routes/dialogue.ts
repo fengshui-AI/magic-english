@@ -393,3 +393,16 @@ dialogueRoutes.post(
 )
 
 export { dialogueRoutes }
+
+// ============================================================
+// GET /api/v1/health/llm — 诊断 LLM 连通性（不需鉴权，部署后浏览器访问看错误）
+// ============================================================
+dialogueRoutes.get('/health/llm', async (req: Request, res: Response) => {
+  const cfg = {
+    baseUrl: process.env.LLM_BASE_URL || 'https://apihub.agnes-ai.com/v1',
+    apiKey: process.env.LLM_API_KEY ? '***已配(长度' + process.env.LLM_API_KEY.length + ')***' : '❌ 未配',
+    model: process.env.LLM_MODEL || 'agnes-1.5-flash (默认)',
+    hasKey: !!process.env.LLM_API_KEY,
+  }
+  res.json({ config: cfg, note: '此接口仅供部署时诊断 LLM 配置，不消耗配额' })
+})

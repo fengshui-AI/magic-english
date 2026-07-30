@@ -64,7 +64,9 @@ export async function speak(
     let filePath = ttsCache.get(cacheKey);
     if (!filePath) {
       const res = await post<TTSResp>('/api/v1/speech/tts', { text, voice });
-      const base64 = res.audioBase64 || (res.audioUrl || '').replace(/^data:audio\/mp3;base64,/, '');
+      // 腾讯云 SDK 返回的 base64 可能含换行符/RFC2045分隔符,需先清洗
+      const raw = res.audioBase64 || (res.audioUrl || '').replace(/^data:audio\/mp3;base64,/, '');
+      const base64 = raw.replace(/[\r\n\s]/g, '');
       if (!base64) {
         // 后端降级（没配腾讯云密钥）→ audioUrl 为空
         onStateChange?.(false);
