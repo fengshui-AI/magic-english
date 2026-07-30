@@ -43,7 +43,7 @@ export const STAGE_LABEL: Record<PetStage, string> = {
  */
 export const GROWTH_CONFIG: { stage: PetStage; threshold: number }[] = [
   { stage: 'seed', threshold: 0 },
-  { stage: 'sprout', threshold: 30 },
+  { stage: 'sprout', threshold: 1 }, // ⚠️临时验证值(原30)：学1分钟即发芽，验证完改回30
   { stage: 'bloom', threshold: 120 },
   { stage: 'fruit', threshold: 300 },
 ]
