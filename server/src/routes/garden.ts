@@ -105,7 +105,7 @@ gardenRoutes.get('/', async (req: Request, res: Response) => {
     res.json({
       birthplace,
       theme,
-      stage: pet?.stage || 'seed',
+      stage: pet?.stage || 'incubating',
       buildings,
       items,
       layoutData,

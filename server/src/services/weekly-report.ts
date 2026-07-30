@@ -259,7 +259,7 @@ export async function generateWeeklyReport(
     },
     pet: {
       name: pet?.name || '豆豆',
-      stage: pet?.stage || 'seed',
+      stage: pet?.stage || 'incubating',
       stageProgress: pet?.stageProgress || 0,
       totalMinutes: pet?.totalLearningMinutes || 0,
       gradient: gradient.name,

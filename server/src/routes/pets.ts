@@ -1,12 +1,13 @@
 ﻿import { Router } from 'express'
 import type { Request, Response } from 'express'
 import { db } from '../db/index.js'
-import { pets, petEvolutions } from '../db/schemas/index.js'
-import { eq } from 'drizzle-orm'
+import { pets, petEvolutions, petLottery } from '../db/schemas/index.js'
+import { eq, and, asc } from 'drizzle-orm'
 import { z } from 'zod'
 import { validateBody, getValidatedBody } from '../middleware/validate.js'
 import { authMiddleware, getJwtPayload } from '../middleware/auth.js'
-import { buildGrowthInfo, type PetStage } from '../services/growth-engine.js'
+import { buildGrowthInfo, type PetStage, STAGE_ORDER, migrateLegacyStage } from '../services/growth-engine.js'
+import { crackOnce, MAX_LOTTERY_CHANCES, CONTAINER_LABEL, RARITY_LABEL, type Container, type Rarity } from '../services/lottery-engine.js'
 
 export const petRoutes = Router()
 
@@ -26,7 +27,7 @@ export const createPetSchema = z.object({
 export const updatePetSchema = z
   .object({
     name: z.string().min(1).max(30).optional(),
-    stage: z.enum(['seed', 'sprout', 'bloom', 'fruit']).optional(),
+    stage: z.enum(['incubating', 'hatched', 'juvenile', 'growing', 'evolving', 'complete']).optional(),
     stageProgress: z.number().int().min(0).max(100).optional(),
     totalLearningMinutes: z.number().int().min(0).optional(),
   })
@@ -34,10 +35,10 @@ export const updatePetSchema = z
 
 export function validatePetUpdatePayload(
   body: z.infer<typeof updatePetSchema>,
-  existing: { stage: 'seed' | 'sprout' | 'bloom' | 'fruit' },
+  existing: { stage: 'incubating' | 'hatched' | 'juvenile' | 'growing' | 'evolving' | 'complete' },
 ) {
-  if (body.name && existing.stage !== 'seed') {
-    return 'Name may only be changed when the pet is in seed stage'
+  if (body.name && existing.stage !== 'incubating') {
+    return 'Name may only be changed when the pet is in incubating stage'
   }
   return null
 }
@@ -89,16 +90,189 @@ petRoutes.get('/mine', async (req: Request, res: Response) => {
           specialty: 'balanced',
         })
         .returning()
-      const growth = buildGrowthInfo(created.totalLearningMinutes, created.stage as PetStage)
+      const growth = buildGrowthInfo(created.totalLearningMinutes, migrateLegacyStage(created.stage))
       res.status(201).json({ pet: created, growth })
       return
     }
 
     // 返回豆豆 + 成长信息对象（守铁律：返回对象不返回裸值，hint 后端拼装）
-    const growth = buildGrowthInfo(pet.totalLearningMinutes, pet.stage as PetStage)
+    const growth = buildGrowthInfo(pet.totalLearningMinutes, migrateLegacyStage(pet.stage))
     res.json({ pet, growth })
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to get pet' })
+  }
+})
+
+// ============================================================
+// 砸金蛋诞生仪式（PRD V3.7 4.3.6）
+// ⚠️ 必须放在 GET /:id 之前，否则 /lottery 会被 :id 通配拦截
+// ============================================================
+const chooseSchema = z.object({
+  lotteryId: z.string().uuid(),
+})
+
+// GET /api/v1/pets/lottery — 查询当前砸蛋进度（剩余机会 + 已砸结果）
+petRoutes.get('/lottery', async (req: Request, res: Response) => {
+  try {
+    const { userId } = getJwtPayload(req)
+    const rolls = await db
+      .select()
+      .from(petLottery)
+      .where(eq(petLottery.userId, userId))
+      .orderBy(asc(petLottery.chanceIndex))
+
+    const chancesUsed = rolls.length
+    const remainingChances = Math.max(MAX_LOTTERY_CHANCES - chancesUsed, 0)
+    const finalized = rolls.some((r) => r.chosen)
+
+    res.json({
+      maxChances: MAX_LOTTERY_CHANCES,
+      chancesUsed,
+      remainingChances,
+      finalized, // 是否已挑定容器（挑定后不可再砸）
+      rolls: rolls.map((r) => ({
+        id: r.id,
+        chanceIndex: r.chanceIndex,
+        container: r.container,
+        containerLabel: CONTAINER_LABEL[r.container as Container] ?? r.container,
+        rarity: r.rarity,
+        rarityLabel: RARITY_LABEL[r.rarity as Rarity] ?? r.rarity,
+        chosen: r.chosen,
+      })),
+    })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to get lottery state' })
+  }
+})
+
+// POST /api/v1/pets/lottery/crack — 砸一次金蛋
+// 无入参：服务端按已用次数自动推进 chanceIndex（1~3），首次保底 ≥ rare。
+petRoutes.post('/lottery/crack', async (req: Request, res: Response) => {
+  try {
+    const { userId } = getJwtPayload(req)
+
+    // 已挑定容器则不允许再砸
+    const rolls = await db
+      .select()
+      .from(petLottery)
+      .where(eq(petLottery.userId, userId))
+      .orderBy(asc(petLottery.chanceIndex))
+
+    if (rolls.some((r) => r.chosen)) {
+      res.status(409).json({ error: '已经挑定容器，不能再砸啦' })
+      return
+    }
+    if (rolls.length >= MAX_LOTTERY_CHANCES) {
+      res.status(409).json({ error: '3 次机会已用完，请从结果里挑一个喜欢的' })
+      return
+    }
+
+    // 取出生地做加权（若已有 pet 记录）
+    const [pet] = await db.select().from(pets).where(eq(pets.userId, userId)).limit(1)
+    const birthPlace = pet?.birthPlace ?? null
+
+    const chanceIndex = rolls.length + 1
+    const result = crackOnce(chanceIndex, birthPlace)
+
+    const [saved] = await db
+      .insert(petLottery)
+      .values({
+        userId,
+        chanceIndex,
+        container: result.container,
+        rarity: result.rarity,
+      })
+      .returning()
+
+    res.status(201).json({
+      lotteryId: saved.id,
+      chanceIndex,
+      container: result.container,
+      containerLabel: result.containerLabel,
+      rarity: result.rarity,
+      rarityLabel: result.rarityLabel,
+      remainingChances: MAX_LOTTERY_CHANCES - chanceIndex,
+    })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to crack egg' })
+  }
+})
+
+// POST /api/v1/pets/lottery/choose — 从已砸结果里挑定一个容器留下
+// 入参 { lotteryId }：把该记录 chosen=true，写入 pets.container/rarity，stage=incubating。
+petRoutes.post('/lottery/choose', validateBody(chooseSchema), async (req: Request, res: Response) => {
+  try {
+    const { userId } = getJwtPayload(req)
+    const body = getValidatedBody<typeof chooseSchema>(req)
+
+    // 校验该 lottery 记录属于本人
+    const [roll] = await db
+      .select()
+      .from(petLottery)
+      .where(and(eq(petLottery.id, body.lotteryId), eq(petLottery.userId, userId)))
+      .limit(1)
+
+    if (!roll) {
+      res.status(404).json({ error: '找不到这次砸蛋记录' })
+      return
+    }
+
+    // 已挑定则幂等返回
+    const existingChosen = await db
+      .select()
+      .from(petLottery)
+      .where(and(eq(petLottery.userId, userId), eq(petLottery.chosen, true)))
+      .limit(1)
+    if (existingChosen.length > 0 && existingChosen[0].id !== roll.id) {
+      res.status(409).json({ error: '已经挑定过其它容器了' })
+      return
+    }
+
+    // 标记选中
+    await db.update(petLottery).set({ chosen: true }).where(eq(petLottery.id, roll.id))
+
+    // 写入 pet：诞生 → 进入孵化。若无 pet 记录先建（出生地缺省 forest，后续引导可改）。
+    let [pet] = await db.select().from(pets).where(eq(pets.userId, userId)).limit(1)
+    if (!pet) {
+      ;[pet] = await db
+        .insert(pets)
+        .values({
+          userId,
+          name: '豆豆',
+          birthPlace: 'forest',
+          personality: 'curious',
+          specialty: 'balanced',
+          container: roll.container,
+          rarity: roll.rarity,
+          stage: 'incubating',
+          bornAt: new Date(),
+        })
+        .returning()
+    } else {
+      ;[pet] = await db
+        .update(pets)
+        .set({
+          container: roll.container,
+          rarity: roll.rarity,
+          stage: 'incubating',
+          bornAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(pets.id, pet.id))
+        .returning()
+    }
+
+    const growth = buildGrowthInfo(pet.totalLearningMinutes, migrateLegacyStage(pet.stage))
+    res.json({
+      pet,
+      growth,
+      container: roll.container,
+      containerLabel: CONTAINER_LABEL[roll.container as Container] ?? roll.container,
+      rarity: roll.rarity,
+      rarityLabel: RARITY_LABEL[roll.rarity as Rarity] ?? roll.rarity,
+    })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to choose container' })
   }
 })
 
@@ -135,8 +309,8 @@ petRoutes.patch('/:id', validateBody(updatePetSchema), async (req: Request, res:
       return
     }
 
-    if (body.name && existing.stage !== 'seed') {
-      res.status(400).json({ error: 'Name may only be changed when the pet is in seed stage' })
+    if (body.name && migrateLegacyStage(existing.stage) !== 'incubating') {
+      res.status(400).json({ error: 'Name may only be changed when the pet is in incubating stage' })
       return
     }
 
@@ -191,19 +365,19 @@ petRoutes.post('/feed', validateBody(feedSchema), async (req: Request, res: Resp
     const addedMinutes = body.minutes || Math.floor((body.exp || 30) / 2)
     const newTotal = pet.totalLearningMinutes + addedMinutes
 
-    // 计算是否升级
-    let newStage = pet.stage
+    // 计算是否升级（六阶段 STAGE_ORDER，兼容历史旧枚举）
+    const curStage = migrateLegacyStage(pet.stage)
+    let newStage: PetStage = curStage
     let newProgress = pet.stageProgress + (body.exp || 30)
-    const stages = ['seed', 'sprout', 'bloom', 'fruit'] as const
-    const currentStageIdx = stages.indexOf(pet.stage as any)
+    const currentStageIdx = STAGE_ORDER.indexOf(curStage)
 
-    if (newProgress >= 100 && currentStageIdx < stages.length - 1) {
-      newStage = stages[currentStageIdx + 1]
+    if (newProgress >= 100 && currentStageIdx < STAGE_ORDER.length - 1) {
+      newStage = STAGE_ORDER[currentStageIdx + 1]
       newProgress = 0
 
       await db.insert(petEvolutions).values({
         petId: pet.id,
-        fromStage: pet.stage,
+        fromStage: curStage,
         toStage: newStage,
         totalMinutesAtTrigger: newTotal,
       })
@@ -292,3 +466,4 @@ petRoutes.get('/evolution', async (req: Request, res: Response) => {
     res.status(500).json({ error: err.message || 'Failed to get evolution history' })
   }
 })
+

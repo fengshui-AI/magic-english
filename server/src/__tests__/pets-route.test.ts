@@ -49,20 +49,20 @@ describe('Pet routes validation', () => {
     expect(result.success).toBe(false)
   })
 
-  it('allows name change when pet is in seed stage', () => {
+  it('allows name change when pet is in incubating stage', () => {
     const result = updatePetSchema.safeParse({
       name: '新豆豆',
     })
     expect(result.success).toBe(true)
-    expect(validatePetUpdatePayload(result.data, { stage: 'seed' })).toBeNull()
+    expect(validatePetUpdatePayload(result.data, { stage: 'incubating' })).toBeNull()
   })
 
-  it('disallows name change when pet is beyond seed stage', () => {
+  it('disallows name change when pet is beyond incubating stage', () => {
     const result = updatePetSchema.safeParse({
       name: '新豆豆',
     })
     expect(result.success).toBe(true)
-    const error = validatePetUpdatePayload(result.data, { stage: 'sprout' })
-    expect(error).toBe('Name may only be changed when the pet is in seed stage')
+    const error = validatePetUpdatePayload(result.data, { stage: 'hatched' })
+    expect(error).toBe('Name may only be changed when the pet is in incubating stage')
   })
 })

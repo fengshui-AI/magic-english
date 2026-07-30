@@ -6,66 +6,100 @@
  * 2. 由易到难 —— 前期门槛小快给甜头，后期门槛递增拉长追求。
  * 3. 累计有效学习分钟驱动 —— 鼓励每天来，而非一次刷很久。
  *
- * A 阶段说明：沿用现有四阶段枚举 seed→sprout→bloom→fruit（零改表、前端 STAGE_MAP 现成）。
- * Phase B 砸蛋上线时，再把展示层文案映射为 孵化/破壳/幼体/... 六阶段（纯文案，不改数据）。
+ * A 阶段说明（已升级）：Phase B 起改为六阶段真身枚举（对齐 PRD V3.7 4.6.1）：
+ * incubating(孵化) → hatched(破壳) → juvenile(幼体) → growing(成长期) → evolving(进化) → complete(终态/圆满)。
+ * 旧四阶段(seed/sprout/bloom/fruit)已废弃，数据迁移映射见 migrateLegacyStage。
  */
 
 import { db } from '../db/index.js'
 import { pets, petEvolutions } from '../db/schemas/index.js'
 import { eq } from 'drizzle-orm'
 
-/** 成长阶段（当前 A 阶段沿用四阶段枚举） */
-export type PetStage = 'seed' | 'sprout' | 'bloom' | 'fruit'
+/** 成长阶段（六阶段真身枚举，PRD V3.7 4.6.1） */
+export type PetStage = 'incubating' | 'hatched' | 'juvenile' | 'growing' | 'evolving' | 'complete'
 
 /** 阶段顺序（用于跨级推进与查找下一阶段） */
-export const STAGE_ORDER: PetStage[] = ['seed', 'sprout', 'bloom', 'fruit']
+export const STAGE_ORDER: PetStage[] = [
+  'incubating',
+  'hatched',
+  'juvenile',
+  'growing',
+  'evolving',
+  'complete',
+]
 
 /** 每个阶段的中文标签（后端拼装 hint 用，前端也可复用） */
 export const STAGE_LABEL: Record<PetStage, string> = {
-  seed: '一颗种子',
-  sprout: '发芽了',
-  bloom: '开花了',
-  fruit: '圆满',
+  incubating: '孵化中',
+  hatched: '破壳',
+  juvenile: '幼体',
+  growing: '成长期',
+  evolving: '进化',
+  complete: '圆满',
 }
 
 /**
- * 成长曲线配置（由易到难，可调）
+ * 旧四阶段 → 六阶段迁移映射（防止历史数据里残留 seed/sprout/bloom/fruit 导致 NaN）。
+ * 语义对齐：seed(种子/未破壳)=incubating；sprout(刚发芽)=hatched；bloom(开花)=growing；fruit(圆满)=complete。
+ * 传入未知值一律回落 incubating。
+ */
+const LEGACY_STAGE_MAP: Record<string, PetStage> = {
+  seed: 'incubating',
+  sprout: 'hatched',
+  bloom: 'growing',
+  fruit: 'complete',
+}
+
+/** 把任意来源的 stage 值规整为合法六阶段枚举 */
+export function migrateLegacyStage(raw: string | null | undefined): PetStage {
+  if (!raw) return 'incubating'
+  if ((STAGE_ORDER as string[]).includes(raw)) return raw as PetStage
+  return LEGACY_STAGE_MAP[raw] ?? 'incubating'
+}
+
+/**
+ * 成长曲线配置（由易到难，可调，对齐 PRD 4.6.2 六阶段门槛）
  * threshold = 进入该阶段所需的「累计有效学习分钟」总量（非增量）。
- * seed 是初始阶段，threshold=0。
+ * incubating 是初始阶段，threshold=0。
  *
- * 递增设计：0 → 30 → 120 → 300
- * - seed→sprout：30 分钟（约 2~3 天，门槛小，快给甜头，抓住孩子）
- * - sprout→bloom：120 分钟（约 1~2 周，拉长）
- * - bloom→fruit：300 分钟（长线追求）
+ * 递增设计：0 → 5 → 30 → 90 → 240 → 500（门槛递增，像打怪升级）
+ * - incubating→hatched：5 分钟（首日秒回报，抓住孩子）
+ * - hatched→juvenile：30 分钟（2~3 天，门槛小）
+ * - juvenile→growing：90 分钟（1~2 周，拉长）
+ * - growing→evolving：240 分钟（1 月+，有挑战）
+ * - evolving→complete：500 分钟（长线追求，圆满）
  *
  * 注：数值是起始配置，上线后按真实流失数据调曲线，改这里即可。
- * PRD 4.6.2 列的 5/30/90/240/500 是六阶段版本，A 阶段先用四阶段等比映射。
  *
- * ⭐ DEV 测试开关：部署环境设环境变量 GROWTH_TEST_MODE=1 时，门槛压到 1/2/3 分钟，
+ * ⭐ DEV 测试开关：部署环境设环境变量 GROWTH_TEST_MODE=1 时，门槛压到 1/2/3/4/5 分钟，
  *    学一次即可看到跨阶段推进，用于真机快速验证。测完在 CloudBase 环境变量里删掉该变量
- *    即恢复正式门槛，无需改代码 / 重新 push。默认（不设该变量）= 正式门槛 30/120/300。
+ *    即恢复正式门槛，无需改代码 / 重新 push。默认（不设该变量）= 正式门槛 5/30/90/240/500。
  */
 const GROWTH_TEST_MODE = process.env.GROWTH_TEST_MODE === '1'
 
 const GROWTH_CONFIG_PROD: { stage: PetStage; threshold: number }[] = [
-  { stage: 'seed', threshold: 0 },
-  { stage: 'sprout', threshold: 30 },
-  { stage: 'bloom', threshold: 120 },
-  { stage: 'fruit', threshold: 300 },
+  { stage: 'incubating', threshold: 0 },
+  { stage: 'hatched', threshold: 5 },
+  { stage: 'juvenile', threshold: 30 },
+  { stage: 'growing', threshold: 90 },
+  { stage: 'evolving', threshold: 240 },
+  { stage: 'complete', threshold: 500 },
 ]
 
 const GROWTH_CONFIG_TEST: { stage: PetStage; threshold: number }[] = [
-  { stage: 'seed', threshold: 0 },
-  { stage: 'sprout', threshold: 1 },
-  { stage: 'bloom', threshold: 2 },
-  { stage: 'fruit', threshold: 3 },
+  { stage: 'incubating', threshold: 0 },
+  { stage: 'hatched', threshold: 1 },
+  { stage: 'juvenile', threshold: 2 },
+  { stage: 'growing', threshold: 3 },
+  { stage: 'evolving', threshold: 4 },
+  { stage: 'complete', threshold: 5 },
 ]
 
 export const GROWTH_CONFIG = GROWTH_TEST_MODE ? GROWTH_CONFIG_TEST : GROWTH_CONFIG_PROD
 
 /** 根据累计分钟计算「应该处于」的阶段 */
 export function stageForMinutes(totalMinutes: number): PetStage {
-  let result: PetStage = 'seed'
+  let result: PetStage = 'incubating'
   for (const item of GROWTH_CONFIG) {
     if (totalMinutes >= item.threshold) result = item.stage
   }
@@ -168,7 +202,7 @@ export async function advancePetStage(
   const [pet] = await db.select().from(pets).where(eq(pets.userId, userId)).limit(1)
   if (!pet) return null
 
-  const currentStage = (pet.stage as PetStage) ?? 'seed'
+  const currentStage = migrateLegacyStage(pet.stage)
   const targetStage = stageForMinutes(totalMinutes)
 
   const curIdx = STAGE_ORDER.indexOf(currentStage)

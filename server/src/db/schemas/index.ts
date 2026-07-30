@@ -55,9 +55,24 @@ export const pets = pgTable(
     birthPlace: varchar('birth_place', { length: 20 }).notNull(),
     personality: varchar('personality', { length: 20 }),
     specialty: varchar('specialty', { length: 20 }),
-    stage: varchar('stage', { length: 10 }).notNull().default('seed'),
+    // 成长阶段（六阶段 V3.7）：incubating→hatched→juvenile→growing→evolving→complete
+    // length 从 10 扩到 16 以容纳 incubating。默认 incubating（砸蛋选定容器后进入孵化）。
+    stage: varchar('stage', { length: 16 }).notNull().default('incubating'),
     stageProgress: integer('stage_progress').notNull().default(0),
     totalLearningMinutes: integer('total_learning_minutes').notNull().default(0),
+    // ---- 砸金蛋诞生 + 密码锁涌现（PRD V3.7 4.3.6 / 4.6）----
+    // 砸金蛋选定的容器：egg/roe/seed/cocoon…（null=尚未砸蛋诞生）
+    container: varchar('container', { length: 20 }),
+    // 稀有度：common/rare/mythic（只影响外观品质，不影响学习功能，保证公平）
+    rarity: varchar('rarity', { length: 10 }).notNull().default('common'),
+    // 孵化进度（0-100，由学习行为推进，满即破壳，非时间倒计时）
+    hatchProgress: integer('hatch_progress').notNull().default(0),
+    // 密码锁各转轮当前格位，如 {"base":2,"limb":1}（MVP 先 base+limb 两转轮）
+    lockSlots: jsonb('lock_slots').notNull().default({}),
+    // 密码锁是否已全部锁定（终态定格，圆满）
+    lockFinalized: boolean('lock_finalized').notNull().default(false),
+    // 破壳时间（命名仪式后写入，null=尚未破壳）
+    bornAt: timestamp('born_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -76,13 +91,40 @@ export const petEvolutions = pgTable(
     petId: uuid('pet_id')
       .notNull()
       .references(() => pets.id),
-    fromStage: varchar('from_stage', { length: 10 }).notNull(),
-    toStage: varchar('to_stage', { length: 10 }).notNull(),
+    fromStage: varchar('from_stage', { length: 16 }).notNull(),
+    toStage: varchar('to_stage', { length: 16 }).notNull(),
     triggeredAt: timestamp('triggered_at', { withTimezone: true }).notNull().defaultNow(),
     totalMinutesAtTrigger: integer('total_minutes_at_trigger').notNull(),
   },
   (table) => ({
     petIdx: index('idx_evolutions_pet').on(table.petId),
+  }),
+)
+
+// ============================================================
+// 3b. pet_lottery — 砸金蛋记录表（PRD V3.7 4.3.6）
+// 记录每次砸蛋结果，支持"3 次机会 + N 选 1 挑喜欢"，留痕可追溯。
+// ============================================================
+export const petLottery = pgTable(
+  'pet_lottery',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    // 第几次机会（1~3）
+    chanceIndex: smallint('chance_index').notNull(),
+    // 砸出的容器：egg/roe/seed/cocoon…
+    container: varchar('container', { length: 20 }).notNull(),
+    // 砸出的稀有度：common/rare/mythic
+    rarity: varchar('rarity', { length: 10 }).notNull(),
+    // 是否被孩子最终选中留下
+    chosen: boolean('chosen').notNull().default(false),
+    // 砸开时间
+    crackedAt: timestamp('cracked_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index('idx_lottery_user').on(table.userId),
   }),
 )
 

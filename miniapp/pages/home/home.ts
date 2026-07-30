@@ -5,20 +5,26 @@
 import { get } from '../../utils/api';
 
 /**
- * 豆豆四阶段成长时光（对齐 PRD 4.6：种子→发芽→开花→结果）
- * 后端 pets.stage 兼容旧枚举（growing/bloom/mature），统一归并到四阶段
+ * 豆豆六阶段成长时光（对齐 PRD V3.7 4.6.1：孵化→破壳→幼体→成长期→进化→圆满）
  * emoji：成长时光的视觉传达（暂用 emoji，后续替换为出生地立绘）
  * mood：情感化状态文案（不含任何数字）
+ * 兼容旧四阶段枚举（seed/sprout/bloom/fruit），通过 LEGACY_STAGE_MAP 透明映射。
  */
 const STAGE_MAP: Record<string, { key: string; label: string; emoji: string; mood: string }> = {
-  seed:    { key: 'seed',   label: '一颗种子',   emoji: '🌰', mood: '豆豆还是一颗种子，它在等你一起长大' },
-  sprout:  { key: 'sprout', label: '发芽了',     emoji: '🌱', mood: '豆豆发芽啦，冒出了嫩嫩的小芽芽' },
-  // 旧枚举 growing 归并到「发芽」时光
-  growing: { key: 'sprout', label: '发芽了',     emoji: '🌱', mood: '豆豆发芽啦，冒出了嫩嫩的小芽芽' },
-  bloom:   { key: 'bloom',  label: '开花了',     emoji: '🌸', mood: '豆豆开花了，你们一起走过好多时光' },
-  // 旧枚举 mature 归并到「结果（圆满）」时光
-  mature:  { key: 'fruit',  label: '圆满',       emoji: '🌟', mood: '豆豆长成了独一无二的模样，圆满啦' },
-  fruit:   { key: 'fruit',  label: '圆满',       emoji: '🌟', mood: '豆豆长成了独一无二的模样，圆满啦' },
+  incubating: { key: 'incubating', label: '孵化中', emoji: '🥚', mood: '豆豆正在蛋里悄悄长大，快来陪它～' },
+  hatched:    { key: 'hatched',    label: '破壳',   emoji: '🐣', mood: '豆豆破壳而出啦！第一次见到你，好开心' },
+  juvenile:   { key: 'juvenile',   label: '幼体',   emoji: '🐛', mood: '豆豆还是个小宝宝，正在慢慢认识世界' },
+  growing:    { key: 'growing',    label: '成长期', emoji: '🦋', mood: '豆豆正在长大，每天都变得不一样' },
+  evolving:   { key: 'evolving',   label: '进化',   emoji: '✨', mood: '豆豆变得越来越独特了，独一无二的模样' },
+  complete:   { key: 'complete',   label: '圆满',   emoji: '🌟', mood: '豆豆长成了独一无二的模样，圆满啦' },
+  // 兼容旧四阶段枚举（透明映射，防历史数据回退报错）
+  seed:       { key: 'incubating', label: '孵化中', emoji: '🥚', mood: '豆豆正在蛋里悄悄长大，快来陪它～' },
+  sprout:     { key: 'hatched',    label: '破壳',   emoji: '🐣', mood: '豆豆破壳而出啦！第一次见到你，好开心' },
+  bloom:      { key: 'growing',    label: '成长期', emoji: '🦋', mood: '豆豆正在长大，每天都变得不一样' },
+  fruit:      { key: 'complete',   label: '圆满',   emoji: '🌟', mood: '豆豆长成了独一无二的模样，圆满啦' },
+  // 旧枚举别名
+  growing_stage: { key: 'growing', label: '成长期', emoji: '🦋', mood: '豆豆正在长大，每天都变得不一样' },
+  mature:    { key: 'complete',   label: '圆满',   emoji: '🌟', mood: '豆豆长成了独一无二的模样，圆满啦' },
 };
 
 /**
@@ -57,9 +63,9 @@ interface ProgressResp {
 Page({
   data: {
     dodoName: '豆豆',
-    dodoStage: '一颗种子',
-    dodoEmoji: '🌰',
-    dodoMood: '豆豆还是一颗种子，它在等你一起长大',
+    dodoStage: '孵化中',
+    dodoEmoji: '🥚',
+    dodoMood: '豆豆正在蛋里悄悄长大，快来陪它～',
     /** 成长钩子文案（后端 growth.hint 拼装，不含数字，守 PRD 4.7 铁律） */
     growthHint: '',
     /** 连胜火焰：档位(0-5) + 形态，只显视觉不显天数 */
