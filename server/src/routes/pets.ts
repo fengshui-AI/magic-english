@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { validateBody, getValidatedBody } from '../middleware/validate.js'
 import { authMiddleware, getJwtPayload } from '../middleware/auth.js'
+import { buildGrowthInfo, type PetStage } from '../services/growth-engine.js'
 
 export const petRoutes = Router()
 
@@ -88,11 +89,14 @@ petRoutes.get('/mine', async (req: Request, res: Response) => {
           specialty: 'balanced',
         })
         .returning()
-      res.status(201).json({ pet: created })
+      const growth = buildGrowthInfo(created.totalLearningMinutes, created.stage as PetStage)
+      res.status(201).json({ pet: created, growth })
       return
     }
 
-    res.json({ pet })
+    // 返回豆豆 + 成长信息对象（守铁律：返回对象不返回裸值，hint 后端拼装）
+    const growth = buildGrowthInfo(pet.totalLearningMinutes, pet.stage as PetStage)
+    res.json({ pet, growth })
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to get pet' })
   }

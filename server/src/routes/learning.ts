@@ -6,6 +6,7 @@ import { eq, and, gte, lte, sql, desc, or, isNull } from 'drizzle-orm'
 import { authMiddleware, getJwtPayload } from '../middleware/auth.js'
 import { calculateNextReview, isReviewDue } from '../services/ebbinghaus.js'
 import { earnStarlight } from '../services/starlight-service.js'
+import { advancePetStage } from '../services/growth-engine.js'
 import { userProfiles } from '../db/schemas/index.js'
 
 export const learningRoutes = Router()
@@ -150,17 +151,26 @@ learningRoutes.post('/session/end', async (req: Request, res: Response) => {
       .where(eq(learningRecords.id, sessionId))
       .returning()
 
-    // 更新宠物学习时长
+    // 更新宠物学习时长 + 推进成长阶段（成长引擎）
+    let growthResult = null
     if (effectiveMinutes > 0) {
       const [pet] = await db.select().from(pets).where(eq(pets.userId, userId)).limit(1)
       if (pet) {
+        const newTotal = pet.totalLearningMinutes + effectiveMinutes
         await db
           .update(pets)
           .set({
-            totalLearningMinutes: pet.totalLearningMinutes + effectiveMinutes,
+            totalLearningMinutes: newTotal,
             updatedAt: new Date(),
           })
           .where(eq(pets.userId, userId))
+
+        // 累计分钟更新后，驱动 stage 推进（这是留钩子的命根子：豆豆随学习真正长大）
+        try {
+          growthResult = await advancePetStage(userId, newTotal)
+        } catch {
+          // 成长推进失败不影响主流程
+        }
       }
     }
 
@@ -179,7 +189,11 @@ learningRoutes.post('/session/end', async (req: Request, res: Response) => {
       // 星光获取失败不影响主流程
     }
 
-    res.json({ session: updated })
+    res.json({
+      session: updated,
+      growth: growthResult?.growth ?? null,
+      stageChanged: growthResult?.stageChanged ?? false,
+    })
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to end session' })
   }

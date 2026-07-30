@@ -16,6 +16,8 @@
     <view class="dodo-info">
       <text class="text-md text-bold">{{dodoName}} · {{dodoStage}}</text>
       <text class="dodo-mood-text text-sm text-secondary">{{dodoMood}}</text>
+      <!-- 成长钩子：随学习进度动态变化的期待文案（不含数字，守 PRD 4.7） -->
+      <text wx:if="{{growthHint}}" class="dodo-growth-hint text-sm">{{growthHint}}</text>
     </view>
   </view>
 

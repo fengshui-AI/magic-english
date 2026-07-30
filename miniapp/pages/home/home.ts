@@ -12,7 +12,7 @@ import { get } from '../../utils/api';
  */
 const STAGE_MAP: Record<string, { key: string; label: string; emoji: string; mood: string }> = {
   seed:    { key: 'seed',   label: '一颗种子',   emoji: '🌰', mood: '豆豆还是一颗种子，它在等你一起长大' },
-  sprout:  { key: 'sprout', label: '发芽了',     emoji: '🌱', mood: '���豆发芽啦，冒出了嫩嫩的小芽芽' },
+  sprout:  { key: 'sprout', label: '发芽了',     emoji: '🌱', mood: '豆豆发芽啦，冒出了嫩嫩的小芽芽' },
   // 旧枚举 growing 归并到「发芽」时光
   growing: { key: 'sprout', label: '发芽了',     emoji: '🌱', mood: '豆豆发芽啦，冒出了嫩嫩的小芽芽' },
   bloom:   { key: 'bloom',  label: '开花了',     emoji: '🌸', mood: '豆豆开花了，你们一起走过好多时光' },
@@ -48,6 +48,7 @@ function streakToFlameLevel(streak: number): number {
 
 interface PetResp {
   pet: { name: string; stage: string; stageProgress: number };
+  growth?: { stage: string; stageLabel: string; hint: string; progressPercent: number };
 }
 interface ProgressResp {
   summary: { currentStreak: number };
@@ -59,6 +60,8 @@ Page({
     dodoStage: '一颗种子',
     dodoEmoji: '🌰',
     dodoMood: '豆豆还是一颗种子，它在等你一起长大',
+    /** 成长钩子文案（后端 growth.hint 拼装，不含数字，守 PRD 4.7 铁律） */
+    growthHint: '',
     /** 连胜火焰：档位(0-5) + 形态，只显视觉不显天数 */
     flameLevel: 0,
     flameEmoji: '',
@@ -93,6 +96,10 @@ Page({
         patch.dodoStage = stage.label;
         patch.dodoEmoji = stage.emoji;
         patch.dodoMood = stage.mood;
+        // 成长钩子文案：优先用后端 hint（随学习进度动态变化，制造"再陪一会就长大"的期待）
+        if (petRes.growth?.hint) {
+          patch.growthHint = petRes.growth.hint;
+        }
       }
 
       if (progressRes?.summary) {

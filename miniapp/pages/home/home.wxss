@@ -84,6 +84,13 @@
   line-height: 1.4;
 }
 
+/* 成长钩子文案：暖色高亮，制造"再陪一会就长大"的期待感 */
+.dodo-growth-hint {
+  margin-top: 10rpx;
+  color: #f59e0b;
+  line-height: 1.4;
+}
+
 .start-btn {
   width: 100%;
   margin-top: 48rpx;
