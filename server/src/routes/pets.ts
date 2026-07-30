@@ -282,8 +282,9 @@ petRoutes.get('/:id', async (req: Request, res: Response) => {
   }
 })
 
-// PATCH /api/v1/pets/:id
-petRoutes.patch('/:id', validateBody(updatePetSchema), async (req: Request, res: Response) => {
+// PATCH / PUT /api/v1/pets/:id
+// 注：微信小程序 wx.request 不支持 PATCH，故同时注册 PUT 供小程序端调用（改名等），逻辑完全一致。
+const updatePetHandler = async (req: Request, res: Response) => {
   try {
     const body = getValidatedBody<typeof updatePetSchema>(req)
     const id = req.params.id
@@ -320,7 +321,10 @@ petRoutes.patch('/:id', validateBody(updatePetSchema), async (req: Request, res:
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to update pet' })
   }
-})
+}
+
+petRoutes.patch('/:id', validateBody(updatePetSchema), updatePetHandler)
+petRoutes.put('/:id', validateBody(updatePetSchema), updatePetHandler)
 
 // GET /api/v1/pets/:id/stage-history
 petRoutes.get('/:id/stage-history', async (req: Request, res: Response) => {
